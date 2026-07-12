@@ -97,3 +97,47 @@ consistent with the conventions and note it here."
 - Authenticated pages live under the `src/app/(app)/` route group so a single
   layout enforces the gate and renders the nav shell. Members/Dues/Events/
   Settings nav links are added as those pages land in later phases.
+
+## Phase 3 — Members (directory, detail, approvals, status/role editing)
+
+### Directory columns
+- Everyone sees name / department / level / committee / status. Execs
+  additionally see email, phone, and dues status. This reconciles the §5 matrix
+  ("directory: name, dept, committee only") with the §6 table (which also lists
+  level and status) — level and status are treated as non-sensitive; contact
+  info and dues are exec-only.
+- The directory table excludes PENDING members — they appear only in the
+  exec-only "Pending approvals" section. The status filter therefore offers
+  ACTIVE / INACTIVE / ALUMNI.
+
+### Reject semantics
+- "Reject" a pending applicant sets status to **INACTIVE** (soft), honouring
+  §3's no-hard-delete rule. The `MemberStatus` enum is fixed by the spec (no
+  REJECTED value), so INACTIVE is the closest soft outcome. A rejected/inactive
+  user who logs in sees the "account not active" notice.
+
+### Self-guards (lockout prevention)
+- An exec/president cannot change their **own** status or role (the action
+  rejects it and the UI disables those controls). This prevents an accidental
+  self-lockout (e.g. the only president demoting themselves).
+
+### Committee editing
+- Editing a member's committee is gated the same as status (exec+). A submitted
+  committee must be one of the club's configured committees (or empty to clear).
+
+### Member detail authorization
+- Full details (contact info, dues history, attendance history) render only for
+  exec+ **or** the member viewing their own profile; everyone else gets a
+  limited view (public profile fields only), per §5 "view full details: own
+  only". Verified over HTTP: president→other = full, member→other = limited,
+  member→self = full.
+
+### Responsive tables
+- Tables render as a bordered table on `md+` and collapse to a card list on
+  small screens (SPEC §8). Rows navigate to the detail page via the name link
+  (desktop) or a full-card link (mobile).
+
+### Instant-apply edit controls
+- Status/committee/role edits use shadcn Selects that call the server action on
+  change (optimistic local state, revert + toast on failure) rather than a
+  submit button — simpler than a dialog for single-field changes.

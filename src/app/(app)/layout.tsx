@@ -100,7 +100,10 @@ export default async function AppLayout({
               <Link href="/dashboard" className="hover:text-foreground">
                 Dashboard
               </Link>
-              {/* Members / Dues / Events / Settings links land in later phases. */}
+              <Link href="/members" className="hover:text-foreground">
+                Members
+              </Link>
+              {/* Dues / Events / Settings links land in later phases. */}
             </nav>
           </div>
           <div className="flex items-center gap-3">
