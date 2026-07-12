@@ -111,7 +111,14 @@ export default async function AppLayout({
               <Link href="/events" className="hover:text-foreground">
                 Events
               </Link>
-              {/* Settings link lands in a later phase. */}
+              <Link href="/profile" className="hover:text-foreground">
+                Profile
+              </Link>
+              {membership.role === "PRESIDENT" ? (
+                <Link href="/settings" className="hover:text-foreground">
+                  Settings
+                </Link>
+              ) : null}
             </nav>
           </div>
           <div className="flex items-center gap-3">
@@ -128,6 +135,17 @@ export default async function AppLayout({
           </div>
         </div>
       </header>
+      {membership.user.mustChangePassword ? (
+        <div className="border-b bg-amber-50 dark:bg-amber-950/40">
+          <div className="mx-auto w-full max-w-6xl px-4 py-2 text-sm text-amber-900 dark:text-amber-200">
+            Please{" "}
+            <Link href="/profile" className="font-medium underline">
+              change your password
+            </Link>{" "}
+            — you&apos;re using a default password.
+          </div>
+        </div>
+      ) : null}
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">{children}</main>
     </div>
   );

@@ -204,3 +204,38 @@ consistent with the conventions and note it here."
 ### Navigation
 - Events is a nav link for everyone (RSVP is all-active). Create/Edit/Delete are
   exec-only (buttons gated by role and re-checked in the server actions).
+
+## Phase 6 — Dashboard, settings, profile
+
+### Dashboard
+- Everyone sees: their dues status for the current period, the next 3 upcoming
+  events with inline RSVP buttons (reusing the events `RsvpButtons`), and a
+  profile summary. Execs additionally get four stat cards: active members,
+  pending approvals (links to /members), % dues paid, and next-event RSVPs.
+- "% dues paid" is computed over ACTIVE members
+  (`paidActive / activeCount`) for the current period.
+
+### Settings (president-only)
+- `/settings` redirects non-presidents to /dashboard; `updateSettings`
+  re-checks `can(settings:edit)`. It writes club name + the settings JSON and
+  revalidates /dues, /members, /dashboard, /profile (all read settings).
+- Departments and committees are edited with a reusable tag-style
+  `ListEditor` (add via input/Enter, remove via chip ×); entries are
+  de-duplicated on save.
+- Verified end-to-end (acceptance #5): changing `currentPeriod` makes the dues
+  dashboard show everyone unpaid for the new period (0/12) while the previous
+  period's history is preserved (7/12).
+
+### Profile
+- Editing splits across tables in a transaction: `name` on User;
+  `phone`/`department`/`level` on Membership. Department uses a Select seeded
+  from club settings.
+- `changePassword` verifies the current password (bcrypt), sets the new hash,
+  and clears `mustChangePassword`.
+
+### mustChangePassword: banner, not a hard gate
+- Users flagged `mustChangePassword` (from CSV import) see a persistent banner
+  in the app shell linking to /profile; the flag clears when they change their
+  password. A hard redirect gate was avoided because the edge proxy has no DB
+  access and a server layout can't reliably read the current path — the banner
+  is the pragmatic v1 treatment.
