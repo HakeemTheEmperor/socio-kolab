@@ -60,3 +60,40 @@ consistent with the conventions and note it here."
 ### Misc
 - `create-next-app` generated its own `CLAUDE.md` and `AGENTS.md`; left in place
   for now, to be reconciled with the project README in the Phase 7 polish pass.
+
+## Phase 2 — Auth (register, login, session, pending gate)
+
+### Config split for the edge
+- Auth.js config is split per the official v5 pattern: `src/auth.config.ts` is
+  edge-safe (no Prisma/bcrypt) and used by the proxy; `src/auth.ts` adds the
+  Credentials provider (Prisma + bcrypt) and is used only by the Node handlers.
+
+### `middleware.ts` → `proxy.ts`
+- Next 16 deprecated the `middleware` filename in favour of `proxy`. The route
+  protection lives in `src/proxy.ts` (same API, new convention).
+
+### JWT carries identity only; authz resolved per request
+- The JWT stores only the user id (`sub`). Role and status are **not** baked into
+  the token — `getCurrentMembership()` loads them fresh from the DB on every
+  request. This means an approval or role change takes effect immediately
+  without forcing the user to log out and back in. The pending/inactive gate is
+  therefore enforced in the authenticated `(app)` layout (a server component with
+  DB access), not in the edge proxy (which can't reach the DB).
+
+### Registration UX
+- After a successful `/register`, the user is **auto signed-in** and lands on
+  `/dashboard`, where the gate immediately shows the "awaiting approval" screen.
+  This matches the spec's "PENDING members who log in see only the awaiting
+  screen" without a separate static success page.
+
+### `can()` requires ACTIVE
+- `can()` returns false for any non-ACTIVE membership, so PENDING/INACTIVE/ALUMNI
+  members can perform no privileged actions even if a code path is reached.
+- INACTIVE and ALUMNI members who log in see a short "account not active" notice
+  (spec only specified the PENDING screen; this is the simplest consistent
+  treatment for the other non-active states).
+
+### Route group
+- Authenticated pages live under the `src/app/(app)/` route group so a single
+  layout enforces the gate and renders the nav shell. Members/Dues/Events/
+  Settings nav links are added as those pages land in later phases.
