@@ -178,3 +178,29 @@ consistent with the conventions and note it here."
 - Generated client-side (SPEC allows this): a Blob download of
   name/department/level/status/amount/date/method. Amounts are plain numbers
   (not currency-formatted) for clean spreadsheet parsing; dates use Africa/Lagos.
+
+## Phase 5 — Events (CRUD, RSVP, check-in)
+
+### Event times are interpreted as Africa/Lagos
+- `datetime-local` inputs have no timezone. Since the display timezone is
+  Africa/Lagos (a fixed UTC+01:00, no DST), the event schema parses input
+  strings as Lagos wall-clock time (appends `+01:00`) so storage is correct
+  regardless of the server timezone (UTC on Vercel). Edit dialogs round-trip via
+  `toDateTimeLocal()`, which renders a stored Date back to Lagos wall time.
+
+### RSVP / check-in rules
+- RSVP is allowed only on **upcoming** events (rejected once `startsAt` has
+  passed) and for any ACTIVE member; it upserts the Attendance row.
+- Check-in (exec-only) can mark **any** ACTIVE member present, even one who
+  never RSVP'd (creates the Attendance row); toggling off clears
+  `checkedInAt`/`checkedInById`. The check-in list shows all ACTIVE members with
+  RSVP'd members sorted to the top and a client-side name search.
+
+### Delete cascades in the app layer
+- The schema has no `onDelete: Cascade` on Attendance→Event, so `deleteEvent`
+  removes attendance rows and the event together in a `$transaction`. Chosen
+  over adding a cascade to avoid another migration; the effect is the same.
+
+### Navigation
+- Events is a nav link for everyone (RSVP is all-active). Create/Edit/Delete are
+  exec-only (buttons gated by role and re-checked in the server actions).

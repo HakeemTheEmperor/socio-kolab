@@ -108,7 +108,10 @@ export default async function AppLayout({
                   Dues
                 </Link>
               ) : null}
-              {/* Events / Settings links land in later phases. */}
+              <Link href="/events" className="hover:text-foreground">
+                Events
+              </Link>
+              {/* Settings link lands in a later phase. */}
             </nav>
           </div>
           <div className="flex items-center gap-3">

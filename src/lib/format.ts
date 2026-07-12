@@ -30,3 +30,18 @@ export function formatDateTime(date: Date | string): string {
     timeStyle: "short",
   }).format(new Date(date));
 }
+
+/** Render a Date as an Africa/Lagos "YYYY-MM-DDTHH:mm" for datetime-local inputs. */
+export function toDateTimeLocal(date: Date | string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(date));
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
+}
