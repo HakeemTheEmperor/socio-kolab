@@ -1,0 +1,137 @@
+// Club Portal — Prisma schema (see SPEC.md §4)
+// Prisma 7 "prisma-client" generator: client is emitted to src/generated/prisma
+// and imported via "@/generated/prisma/client".
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Prisma 7: connection URL lives in prisma.config.ts (CLI) and is passed to
+  // PrismaClient via a driver adapter at runtime (see src/lib/prisma.ts).
+}
+
+model Club {
+  id        String   @id @default(cuid())
+  name      String
+  logoUrl   String?
+  settings  Json     @default("{}")
+  // settings shape: { duesAmount: number, currency: string ("NGN"),
+  //                   currentPeriod: string (e.g. "2026/2027"),
+  //                   departments: string[], committees: string[] }
+  memberships Membership[]
+  events      Event[]
+  dues        DuesRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id                 String  @id @default(cuid())
+  email              String  @unique
+  name               String
+  passwordHash       String
+  mustChangePassword Boolean @default(false)
+  memberships        Membership[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Role {
+  PRESIDENT
+  EXEC
+  MEMBER
+}
+
+enum MemberStatus {
+  ACTIVE
+  INACTIVE
+  ALUMNI
+  PENDING // registered, awaiting exec approval
+}
+
+model Membership {
+  id         String       @id @default(cuid())
+  club       Club         @relation(fields: [clubId], references: [id])
+  clubId     String
+  user       User         @relation(fields: [userId], references: [id])
+  userId     String
+  role       Role         @default(MEMBER)
+  status     MemberStatus @default(PENDING)
+  department String?
+  level      String? // academic year/level, e.g. "300"
+  committee  String?
+  phone      String?
+  joinedAt   DateTime     @default(now())
+  dues       DuesRecord[]
+  attendance Attendance[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clubId, userId])
+  @@index([clubId, status])
+}
+
+model DuesRecord {
+  id           String     @id @default(cuid())
+  club         Club       @relation(fields: [clubId], references: [id])
+  clubId       String
+  membership   Membership @relation(fields: [membershipId], references: [id])
+  membershipId String
+  period       String // e.g. "2026/2027"
+  amount       Decimal    @db.Decimal(10, 2)
+  paidAt       DateTime   @default(now())
+  method       String? // "cash" | "transfer" | "other"
+  recordedById String // membership id of the exec who recorded it
+  note         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([membershipId, period])
+  @@index([clubId, period])
+}
+
+enum RsvpStatus {
+  GOING
+  NOT_GOING
+  MAYBE
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  club        Club     @relation(fields: [clubId], references: [id])
+  clubId      String
+  title       String
+  description String?
+  location    String?
+  startsAt    DateTime
+  endsAt      DateTime?
+  attendance  Attendance[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clubId, startsAt])
+}
+
+model Attendance {
+  id            String      @id @default(cuid())
+  event         Event       @relation(fields: [eventId], references: [id])
+  eventId       String
+  membership    Membership  @relation(fields: [membershipId], references: [id])
+  membershipId  String
+  rsvp          RsvpStatus?
+  checkedInAt   DateTime?
+  checkedInById String? // membership id of exec who checked them in
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId, membershipId])
+}
