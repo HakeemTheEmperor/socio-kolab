@@ -141,3 +141,40 @@ consistent with the conventions and note it here."
 - Status/committee/role edits use shadcn Selects that call the server action on
   change (optimistic local state, revert + toast on failure) rather than a
   submit button — simpler than a dialog for single-field changes.
+
+## Phase 4 — Dues (dashboard, record payment, CSV export)
+
+### shadcn is on Base UI, not Radix
+- The installed shadcn components are built on `@base-ui/react`, not Radix.
+  Consequence: composition uses the `render` prop, not `asChild`
+  (e.g. `<DialogTrigger render={<Button />}>`), and Select `onValueChange`
+  yields `string | null`. Applies to all dialogs/menus in later phases too.
+
+### Record vs. edit (immutable-history reconciliation)
+- `DuesRecord` has `@@unique([membershipId, period])`, so there is at most one
+  record per member per period. `recordPayment` therefore **upserts**: create =
+  a new payment; update = a correction. On correction, `paidAt` (the original
+  payment date) is preserved and `note` serves as the audit trail. This is the
+  pragmatic reading of §3's "corrections create new records or update with an
+  audit field" given the unique constraint (multiple rows per member/period
+  aren't possible).
+
+### Period selection + guard
+- The dashboard shows ACTIVE members for a selected period (default: the club's
+  `currentPeriod`). Period options are the current period plus any period that
+  already has recorded history. `recordPayment` only accepts the current period
+  or a period with existing history, preventing arbitrary period injection.
+- Switching to a period with no records shows everyone Unpaid while preserving
+  other periods' history — verified over HTTP (current: 8/12 paid; empty
+  period: 0/12).
+
+### Access + totals
+- `/dues` is exec-only; non-exec sessions are redirected to `/dashboard`.
+  `recordPayment` re-checks `can(me, "dues:record")` server-side.
+- "Total collected" sums the selected period's records across the displayed
+  ACTIVE members.
+
+### CSV export
+- Generated client-side (SPEC allows this): a Blob download of
+  name/department/level/status/amount/date/method. Amounts are plain numbers
+  (not currency-formatted) for clean spreadsheet parsing; dates use Africa/Lagos.
