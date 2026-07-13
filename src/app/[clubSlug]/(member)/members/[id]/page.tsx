@@ -47,8 +47,9 @@ export default async function MemberDetailPage({
   const { club, membership: me } = await requireClubAccess(clubSlug);
   const settings = getClubSettings(club.settings);
 
-  const member = await prisma.membership.findUnique({
-    where: { id },
+  // Compound id + clubId: another club's membership id must not resolve here.
+  const member = await prisma.membership.findFirst({
+    where: { id, clubId: club.id },
     include: {
       user: true,
       dues: { orderBy: { period: "desc" } },
@@ -59,7 +60,7 @@ export default async function MemberDetailPage({
     },
   });
 
-  if (!member || member.clubId !== club.id) notFound();
+  if (!member) notFound();
 
   const isExec = me.role === "EXEC" || me.role === "PRESIDENT";
   const isPresident = me.role === "PRESIDENT";

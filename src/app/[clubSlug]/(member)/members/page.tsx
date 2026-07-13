@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { prisma } from "@/lib/prisma";
 import { getClubSettings } from "@/lib/club";
 import { requireClubAccess } from "@/lib/club-context";
 import type { Prisma } from "@/generated/prisma/client";
+import { ListSkeleton } from "@/components/page-skeleton";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -32,6 +34,11 @@ function str(v: string | string[] | undefined): string | undefined {
   return typeof v === "string" && v.length > 0 ? v : undefined;
 }
 
+/**
+ * The skeleton is an in-page Suspense boundary rather than a route-level
+ * `loading.tsx`, which would also wrap `members/[id]` and flush the shell before
+ * that segment could 404 a cross-club membership id. See `members/[id]/layout.tsx`.
+ */
 export default async function MembersPage({
   params: routeParams,
   searchParams,
@@ -40,6 +47,20 @@ export default async function MembersPage({
   searchParams: SearchParams;
 }) {
   const { clubSlug } = await routeParams;
+  return (
+    <Suspense fallback={<ListSkeleton />}>
+      <MembersDirectory clubSlug={clubSlug} searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function MembersDirectory({
+  clubSlug,
+  searchParams,
+}: {
+  clubSlug: string;
+  searchParams: SearchParams;
+}) {
   const { club, membership: me } = await requireClubAccess(clubSlug);
   const isExec = me.role === "EXEC" || me.role === "PRESIDENT";
 

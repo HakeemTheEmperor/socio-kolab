@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { prisma } from "@/lib/prisma";
 import { requireClubAccess } from "@/lib/club-context";
 import { formatDateTime } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
+import { ListSkeleton } from "@/components/page-skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EventFormDialog } from "./event-form-dialog";
 import { RsvpButtons } from "./rsvp-buttons";
@@ -55,12 +57,26 @@ function EventCard({
   );
 }
 
+/**
+ * The loading skeleton is a Suspense boundary *inside* the page, not a
+ * route-level `loading.tsx`. A `loading.tsx` here would also wrap the nested
+ * `events/[id]` segment, flushing the shell (and committing a 200) before that
+ * segment's layout could 404 a cross-club event id. See `events/[id]/layout.tsx`.
+ */
 export default async function EventsPage({
   params,
 }: {
   params: Promise<{ clubSlug: string }>;
 }) {
   const { clubSlug } = await params;
+  return (
+    <Suspense fallback={<ListSkeleton />}>
+      <EventsList clubSlug={clubSlug} />
+    </Suspense>
+  );
+}
+
+async function EventsList({ clubSlug }: { clubSlug: string }) {
   const { club, membership: me } = await requireClubAccess(clubSlug);
   const isExec = me.role === "EXEC" || me.role === "PRESIDENT";
   const now = new Date();

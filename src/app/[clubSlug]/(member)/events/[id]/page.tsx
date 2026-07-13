@@ -35,13 +35,14 @@ export default async function EventDetailPage({
   const { club, membership: me } = await requireClubAccess(clubSlug);
   const isExec = me.role === "EXEC" || me.role === "PRESIDENT";
 
-  const event = await prisma.event.findUnique({
-    where: { id },
+  // Compound id + clubId: another club's event id must not resolve here.
+  const event = await prisma.event.findFirst({
+    where: { id, clubId: club.id },
     include: {
       attendance: { include: { membership: { include: { user: true } } } },
     },
   });
-  if (!event || event.clubId !== club.id) notFound();
+  if (!event) notFound();
 
   const now = new Date();
   const upcoming = event.startsAt.getTime() >= now.getTime();

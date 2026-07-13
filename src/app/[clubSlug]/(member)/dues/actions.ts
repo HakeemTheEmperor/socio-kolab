@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
-import { requireClubAccess } from "@/lib/club-context";
+import { requireClubAccess, findMemberInClub } from "@/lib/club-context";
 import { getClubSettings } from "@/lib/club";
 import { can } from "@/lib/permissions";
 import { paymentSchema, type PaymentInput } from "@/lib/validations/dues";
@@ -23,10 +23,8 @@ export async function recordPayment(
   }
   const { membershipId, period, amount, method, note } = parsed.data;
 
-  const target = await prisma.membership.findUnique({
-    where: { id: membershipId },
-  });
-  if (!target || target.clubId !== club.id) {
+  const target = await findMemberInClub(club.id, membershipId);
+  if (!target) {
     return { ok: false, error: "Member not found." };
   }
   if (target.status !== "ACTIVE") {

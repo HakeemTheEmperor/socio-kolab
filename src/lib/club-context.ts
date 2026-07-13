@@ -87,3 +87,35 @@ export async function requireClubAccess(slug: string, minRole?: Role) {
   const membership = await requireMembership(club.id, minRole);
   return { club, membership };
 }
+
+/* --------------------------------------------------------------------------
+ * Cross-club resource guards (MULTI-CLUB.md §2.2)
+ *
+ * A cuid is not a capability. Every sub-resource fetched by id filters on the
+ * id AND the club in the SAME query — never `findUnique({ id })` followed by a
+ * `clubId` comparison, which is one forgotten `if` away from a leak. A valid
+ * event id from club A, requested under club B's slug, must simply not resolve.
+ *
+ * `find*` returns null (server actions turn that into an error message);
+ * `require*` 404s (pages and layouts).
+ * ---------------------------------------------------------------------------*/
+
+export const findEventInClub = cache(async (clubId: string, eventId: string) =>
+  prisma.event.findFirst({ where: { id: eventId, clubId } }),
+);
+
+export const findMemberInClub = cache(async (clubId: string, membershipId: string) =>
+  prisma.membership.findFirst({ where: { id: membershipId, clubId } }),
+);
+
+export async function requireEventInClub(clubId: string, eventId: string) {
+  const event = await findEventInClub(clubId, eventId);
+  if (!event) notFound();
+  return event;
+}
+
+export async function requireMemberInClub(clubId: string, membershipId: string) {
+  const member = await findMemberInClub(clubId, membershipId);
+  if (!member) notFound();
+  return member;
+}

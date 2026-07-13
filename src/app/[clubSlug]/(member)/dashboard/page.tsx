@@ -49,8 +49,8 @@ export default async function DashboardPage({
   const period = settings.currentPeriod;
   const now = new Date();
 
-  const myDues = await prisma.duesRecord.findUnique({
-    where: { membershipId_period: { membershipId: me.id, period } },
+  const myDues = await prisma.duesRecord.findFirst({
+    where: { membershipId: me.id, period, clubId: club.id },
   });
 
   const upcomingEvents = await prisma.event.findMany({

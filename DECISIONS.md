@@ -383,3 +383,52 @@ consistent with the conventions and note it here."
 - `scripts/import-members.ts` gained its `--club <slug>` argument here rather
   than in step 6, because the single-club lookup it used (`club.findFirst()`)
   died with `getCurrentClub`.
+
+## Multi-club step 3 — Cross-club audit
+
+### The rule
+Every fetch of a sub-resource by id filters on the id **and** the club in the
+same query. `findUnique({ where: { id } })` followed by an `if (row.clubId !==
+club.id)` is one forgotten `if` away from a leak, so the pattern is gone from the
+codebase: `lib/club-context.ts` exposes `findEventInClub` / `findMemberInClub`
+(returning null — server actions turn that into "not found") and
+`requireEventInClub` / `requireMemberInClub` (404ing — pages and layouts). Writes
+re-assert the club in the same statement (`update({ where: { id, clubId } })`,
+Prisma's extended where-unique) rather than trusting the preceding read.
+
+The only surviving `findUnique` on a club-scoped model is the membership lookup
+in `club-context.ts`, keyed on `clubId_userId` — already compound.
+
+### Real 404s: why the guard lives in a layout, and why two `loading.tsx` files died
+`notFound()` from inside a *page* cannot set the response status: the nearest
+Suspense boundary has already flushed the shell, so the response is committed as
+200 and the 404 only lands on the client. MULTI-CLUB §8 wants the *response* to
+be a 404 for a cross-club id, so:
+
+- `events/[id]/layout.tsx` and `members/[id]/layout.tsx` resolve the resource
+  before their segment renders. A layout sits *above* its own segment's
+  `loading.tsx`, so it runs before anything is flushed.
+- But a parent segment's `loading.tsx` wraps its nested segments too — so
+  `events/loading.tsx` and `members/loading.tsx` were flushing the shell before
+  the `[id]` layouts ran, which is exactly what made the first attempt at this
+  return 200. They are replaced by a `<Suspense fallback={<ListSkeleton />}>`
+  *inside* `events/page.tsx` and `members/page.tsx`, which bounds only the page's
+  own data fetch. The skeletons are unchanged; the detail routes keep their
+  `loading.tsx` (those sit below the guard and are harmless).
+
+Leaf routes with no nested resources (`dashboard`, `dues`, `profile`,
+`settings`) keep their route-level `loading.tsx`. The role gate on `/dues` and
+`/settings` still `redirect()`s from inside the page, so it commits a 200 and
+redirects on the client — no data is rendered (the component throws first) and
+no acceptance criterion covers it, so it stays as it was.
+
+### Verified against a running server
+- Demo president: Beta's event id and Beta's membership id under `/demo-club/…`
+  both **404**; Demo's own ids still **200**. Beta president: mirror image.
+- Beta president invoking `approveMember("beta-club", <Demo pending id>)` over
+  the real server-action endpoint gets `{"ok":false,"error":"Member not found."}`
+  and the Demo member is still `PENDING` afterwards. Pointing the same action at
+  `"demo-club"` instead redirects (303) — he has no membership there.
+- Positive control: the same action against Beta's own pending member returns
+  `{"ok":true}` and flips the status, so the guard denies rather than the action
+  being broken.
