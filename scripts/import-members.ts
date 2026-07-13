@@ -12,9 +12,12 @@ import {
  * Bulk-import members from a CSV with header: name,email,phone,department,level
  *
  * Usage:
- *   npm run import:members -- path/to/members.csv [defaultPassword]
+ *   npm run import:members -- --club <slug> path/to/members.csv [defaultPassword]
  *
- * Creates User + Membership (ACTIVE) rows scoped to the single seeded club.
+ * Creates User + Membership (ACTIVE) rows in the named club. Exec manual-adds
+ * bypass the `membershipOpen` toggle by design — it gates self-service
+ * applications, not the club's own roster management.
+ *
  * Each imported user is flagged mustChangePassword=true so the default password
  * must be changed on first login. Existing emails are skipped (idempotent).
  */
@@ -70,18 +73,32 @@ function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((cell) => cell.trim() !== ""));
 }
 
+const USAGE =
+  "Usage: npm run import:members -- --club <slug> <path/to/members.csv> [defaultPassword]";
+
 async function main() {
-  const csvPath = process.argv[2];
-  const defaultPassword = process.argv[3] ?? "changeme123";
+  const args = process.argv.slice(2);
+  const clubFlag = args.indexOf("--club");
+  if (clubFlag === -1 || !args[clubFlag + 1]) {
+    throw new Error(`Missing --club <slug>.\n${USAGE}`);
+  }
+  const clubSlug = args[clubFlag + 1];
+
+  // Everything that isn't the --club flag or its value is positional.
+  const positional = args.filter(
+    (_, i) => i !== clubFlag && i !== clubFlag + 1,
+  );
+  const csvPath = positional[0];
+  const defaultPassword = positional[1] ?? "changeme123";
   if (!csvPath) {
-    throw new Error(
-      "Usage: npm run import:members -- <path/to/members.csv> [defaultPassword]",
-    );
+    throw new Error(`Missing CSV path.\n${USAGE}`);
   }
 
-  const club = await prisma.club.findFirst();
+  const club = await prisma.club.findUnique({ where: { slug: clubSlug } });
   if (!club) {
-    throw new Error("No club found. Run `npm run db:seed` first.");
+    throw new Error(
+      `No club with slug "${clubSlug}". Run \`npm run db:seed\` or check the slug.`,
+    );
   }
 
   const rows = parseCsv(readFileSync(csvPath, "utf8"));
@@ -136,7 +153,9 @@ async function main() {
     created++;
   }
 
-  console.log(`Import complete: ${created} created, ${skipped} skipped.`);
+  console.log(
+    `Import into ${club.name} (/${club.slug}) complete: ${created} created, ${skipped} skipped.`,
+  );
 }
 
 main()

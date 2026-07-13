@@ -328,3 +328,58 @@ consistent with the conventions and note it here."
   club rather than `findFirst()` with no ordering. Step 2 replaces it with
   slug-based resolution; until then, the ordering keeps the still-single-club
   pages deterministically pointed at Demo Club now that two club rows exist.
+
+## Multi-club step 2 — Routing restructure
+
+### Route tree
+- `app/[clubSlug]/(member)/…` holds every authenticated club page; `(public)/`
+  holds `/login` and `/clubs`; `/{clubSlug}/register` sits outside `(member)`
+  because it must be reachable *without* a membership.
+- `/login` is global (accounts are platform-level) and no longer names a club.
+  Its "Register" link is gone: you don't join "the portal", you join a specific
+  club via that club's own registration link.
+
+### Guards (`lib/club-context.ts`)
+- `getClubBySlug` resolves only `status: ACTIVE` clubs and calls `notFound()`
+  otherwise, so PENDING / REJECTED / SUSPENDED / nonexistent slugs are one
+  indistinguishable 404.
+- `requireMembership(clubId, minRole?)` redirects a logged-out caller to
+  `/login`, and a caller with no ACTIVE membership to `/clubs?error=…`, which
+  renders the reason. `minRole` is a hard gate (404). The friendly role checks
+  stay with `can()`, which lets a page redirect and an action return a message
+  instead of dead-ending on a 404.
+- `requireClubAccess(slug, minRole?)` is the workhorse both pages and actions
+  call: one function returns the club and the caller's membership in it. Both
+  lookups are `cache()`d, so a layout + page + action in one request share them.
+- The guards live in the **layout**, so cross-club access is denied before any
+  page renders. Verified against a running server: a Demo Club president asking
+  for `/beta-club/dashboard` gets `307 → /clubs?error=no-membership`, and an
+  unknown slug gets a real `404`.
+
+### Server actions take the club slug as their first argument
+- Every action is now `action(clubSlug, …)` and re-resolves the club and the
+  caller's membership server-side. The slug is not a trusted input: it is
+  resolved through `getClubBySlug` + `requireClubAccess` exactly like a page, so
+  passing another club's slug just fails that club's membership check.
+- Client components read the slug from `useParams()` rather than accepting it as
+  a prop. It is already in the URL, so prop-drilling it through every dialog and
+  button would add a parameter that could drift from the route.
+
+### Status codes under `loading.tsx`
+- `notFound()` / `redirect()` *inside a page* now commit a **200** with the
+  not-found (or redirected) UI, not a 404/307: each route has a `loading.tsx`,
+  whose Suspense boundary flushes the shell before the page body runs, and the
+  status is already sent by then. No data leaks — the page component throws
+  before rendering anything — but MULTI-CLUB §8 wants the *response* to be 404.
+  Guards that live in the layout (unknown club, non-member) are unaffected and
+  return true 404/307. Making the in-page cases return real status codes is
+  step 3's job, where the cross-club resource guard is the whole point.
+
+### Interim
+- `/clubs` exists in a minimal form (list memberships, ACTIVE ones link to their
+  dashboard) because `requireMembership` needs somewhere to send people. Step 4
+  adds the auto-forward, the empty state, "Start a new club", and the header
+  switcher.
+- `scripts/import-members.ts` gained its `--club <slug>` argument here rather
+  than in step 6, because the single-club lookup it used (`club.findFirst()`)
+  died with `getCurrentClub`.

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
-// Middleware sends unauthenticated visitors to /login; authenticated ones
-// continue to /dashboard (where the pending-approval gate applies).
+// There is no global home page: every club lives under /{clubSlug}. The proxy
+// sends unauthenticated visitors to /login; authenticated ones pick a club.
 export default function Home() {
-  redirect("/dashboard");
+  redirect("/clubs");
 }
