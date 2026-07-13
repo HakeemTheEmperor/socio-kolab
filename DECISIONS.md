@@ -432,3 +432,41 @@ no acceptance criterion covers it, so it stays as it was.
 - Positive control: the same action against Beta's own pending member returns
   `{"ok":true}` and flips the status, so the guard denies rather than the action
   being broken.
+
+## Multi-club step 4 — The club switcher (/clubs)
+
+### Auto-forward, except when we owe the user an explanation
+§3 says: exactly one ACTIVE membership and no PENDING ones → skip the page and
+go straight to that club's dashboard. Implemented, with one carve-out the spec
+doesn't cover: **no auto-forward when `/clubs` was reached with an `?error=`**.
+`requireClubAccess` sends people here precisely to tell them something ("you're
+not a member of that club"), and a single-club user would otherwise be bounced
+onward instantly with the message dropped — they'd click a club B link and
+silently land on club A's dashboard with no idea why. One extra click beats a
+silent redirect.
+
+### Membership status drives the card, not the club
+Cards show the club's initial (or `logoUrl` when set), name, the user's role,
+and their membership status. Only ACTIVE memberships link anywhere; a PENDING
+one renders as an unclickable card reading "Awaiting approval by a club exec",
+which is where the old in-club "awaiting approval" screen (deleted in step 2)
+now lives.
+
+`logoUrl` is rendered with a plain `<img>`, not `next/image`: club logos are
+arbitrary external URLs and `next/image` would need every host allow-listed in
+`next.config`.
+
+### The switcher affordance is the club name
+In the club header the club name now links to `/clubs` (with a chevron and a
+"Switch club" label), rather than to its own dashboard — the nav row directly
+below already has a Dashboard link, so pointing it there was a wasted target.
+
+### /clubs/new is linked but not built
+The "Start a new club" link (empty state and page footer) 404s until step 6
+builds `/clubs/new`. That is the build order's own sequencing, not an oversight.
+
+### Verified against a running server
+Auto-forward (`/clubs` → 307 → `/demo-club/dashboard`) for the single-club
+president; no forward and both cards for the dual-club user; the PENDING-only
+user sees the awaiting-approval card with no dashboard link (and the club still
+refuses them); the platform admin, with no memberships, gets the empty state.

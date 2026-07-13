@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronsUpDown } from "lucide-react";
 
 import { signOut } from "@/auth";
 import { requireClubAccess } from "@/lib/club-context";
@@ -38,8 +39,19 @@ export default async function ClubLayout({
       <header className="border-b">
         <div className="mx-auto w-full max-w-6xl px-4">
           <div className="flex items-center justify-between gap-4 py-3">
-            <Link href={`/${clubSlug}/dashboard`} className="truncate font-semibold">
-              {club.name}
+            {/* The club name is the switcher: it goes to /clubs, not to this
+                club's dashboard (the nav below already does that). */}
+            <Link
+              href="/clubs"
+              title="Switch club"
+              className="flex min-w-0 items-center gap-1.5 font-semibold hover:text-foreground/80"
+            >
+              <span className="truncate">{club.name}</span>
+              <ChevronsUpDown
+                aria-hidden
+                className="size-4 shrink-0 text-muted-foreground"
+              />
+              <span className="sr-only">Switch club</span>
             </Link>
             <div className="flex items-center gap-3">
               <div className="hidden text-right sm:block">
