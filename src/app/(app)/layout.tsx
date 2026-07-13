@@ -91,48 +91,48 @@ export default async function AppLayout({
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3">
-          <div className="flex items-center gap-6">
-            <Link href="/dashboard" className="font-semibold">
+        <div className="mx-auto w-full max-w-6xl px-4">
+          <div className="flex items-center justify-between gap-4 py-3">
+            <Link href="/dashboard" className="truncate font-semibold">
               {club.name}
             </Link>
-            <nav className="flex items-center gap-4 text-sm text-muted-foreground">
-              <Link href="/dashboard" className="hover:text-foreground">
-                Dashboard
-              </Link>
-              <Link href="/members" className="hover:text-foreground">
-                Members
-              </Link>
-              {membership.role === "EXEC" || membership.role === "PRESIDENT" ? (
-                <Link href="/dues" className="hover:text-foreground">
-                  Dues
-                </Link>
-              ) : null}
-              <Link href="/events" className="hover:text-foreground">
-                Events
-              </Link>
-              <Link href="/profile" className="hover:text-foreground">
-                Profile
-              </Link>
-              {membership.role === "PRESIDENT" ? (
-                <Link href="/settings" className="hover:text-foreground">
-                  Settings
-                </Link>
-              ) : null}
-            </nav>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden text-right sm:block">
-              <p className="text-sm font-medium leading-none">
-                {membership.user.name}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {membership.user.email}
-              </p>
+            <div className="flex items-center gap-3">
+              <div className="hidden text-right sm:block">
+                <p className="text-sm font-medium leading-none">
+                  {membership.user.name}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {membership.user.email}
+                </p>
+              </div>
+              <Badge variant="secondary">{membership.role}</Badge>
+              <SignOutButton />
             </div>
-            <Badge variant="secondary">{membership.role}</Badge>
-            <SignOutButton />
           </div>
+          <nav className="-mb-px flex items-center gap-4 overflow-x-auto pb-2 text-sm text-muted-foreground">
+            <Link href="/dashboard" className="whitespace-nowrap hover:text-foreground">
+              Dashboard
+            </Link>
+            <Link href="/members" className="whitespace-nowrap hover:text-foreground">
+              Members
+            </Link>
+            {membership.role === "EXEC" || membership.role === "PRESIDENT" ? (
+              <Link href="/dues" className="whitespace-nowrap hover:text-foreground">
+                Dues
+              </Link>
+            ) : null}
+            <Link href="/events" className="whitespace-nowrap hover:text-foreground">
+              Events
+            </Link>
+            <Link href="/profile" className="whitespace-nowrap hover:text-foreground">
+              Profile
+            </Link>
+            {membership.role === "PRESIDENT" ? (
+              <Link href="/settings" className="whitespace-nowrap hover:text-foreground">
+                Settings
+              </Link>
+            ) : null}
+          </nav>
         </div>
       </header>
       {membership.user.mustChangePassword ? (

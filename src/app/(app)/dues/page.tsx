@@ -8,12 +8,6 @@ import { can } from "@/lib/permissions";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Table,
   TableBody,
   TableCell,
@@ -68,16 +62,15 @@ export default async function DuesPage({
   });
   const byMember = new Map(records.map((r) => [r.membershipId, r]));
 
-  let paidCount = 0;
-  let collected = 0;
-  const rows = activeMembers.map((m) => {
-    const rec = byMember.get(m.id) ?? null;
-    if (rec) {
-      paidCount += 1;
-      collected += Number(rec.amount);
-    }
-    return { m, rec };
-  });
+  const rows = activeMembers.map((m) => ({
+    m,
+    rec: byMember.get(m.id) ?? null,
+  }));
+  const paidCount = rows.filter((r) => r.rec).length;
+  const collected = rows.reduce(
+    (sum, r) => sum + (r.rec ? Number(r.rec.amount) : 0),
+    0,
+  );
 
   const csvRows: DuesCsvRow[] = rows.map(({ m, rec }) => ({
     name: m.user.name,

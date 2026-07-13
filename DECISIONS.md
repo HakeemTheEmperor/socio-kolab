@@ -239,3 +239,33 @@ consistent with the conventions and note it here."
   password. A hard redirect gate was avoided because the edge proxy has no DB
   access and a server layout can't reliably read the current path — the banner
   is the pragmatic v1 treatment.
+
+## Phase 7 — Polish (responsive, loading/empty states, README)
+
+### Responsive header
+- The app shell header is two rows: brand + user/role/sign-out on top, and the
+  primary nav below in a horizontally-scrollable strip (`overflow-x-auto`,
+  `whitespace-nowrap`). This keeps all six links usable on phones without a
+  hamburger menu.
+
+### Loading states
+- A `Skeleton` primitive (`components/ui/skeleton.tsx`) plus shared
+  `ListSkeleton`/`DetailSkeleton` back a `loading.tsx` in each data route
+  (dashboard, members, members/[id], dues, events, events/[id], settings,
+  profile), satisfying §8's "loading states for every table/list". Empty states
+  were already present on every list; audited and confirmed.
+
+### Docs
+- Replaced the create-next-app `README.md` with project docs (env vars, setup,
+  migrate, seed, CSV import, default credentials, deploy, structure).
+- Kept the generated `AGENTS.md` (its Next 16 warning is apt) and appended
+  project-specific gotchas (Base UI vs Radix, Prisma 7 adapter, proxy, Auth.js
+  split, Server-Action authorization). `CLAUDE.md` re-exports it.
+
+### Lint clean-up (React Compiler rules)
+- Next 16 ships the React Compiler and stricter `eslint-plugin-react-hooks`
+  purity/immutability rules. Fixed the two flagged Server Components: the dues
+  page now derives `paidCount`/`collected` via pure `filter`/`reduce` instead of
+  mutating counters inside `map`, and the event detail page reads `new Date()`
+  into a const rather than calling `Date.now()` inline. `npm run lint`,
+  `tsc --noEmit`, and `next build` are all clean.

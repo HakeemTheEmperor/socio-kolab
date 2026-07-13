@@ -45,7 +45,8 @@ export default async function EventDetailPage({
   });
   if (!event || event.clubId !== club.id) notFound();
 
-  const upcoming = event.startsAt.getTime() >= Date.now();
+  const now = new Date();
+  const upcoming = event.startsAt.getTime() >= now.getTime();
   const myRsvp =
     event.attendance.find((a) => a.membershipId === me.id)?.rsvp ?? null;
 
