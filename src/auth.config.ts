@@ -6,6 +6,7 @@ import type { NextAuthConfig } from "next-auth";
  * Prisma + bcrypt) is added in `src/auth.ts`, used only by the Node handlers.
  */
 export const authConfig = {
+  trustHost: true,
   pages: {
     signIn: "/login",
   },
