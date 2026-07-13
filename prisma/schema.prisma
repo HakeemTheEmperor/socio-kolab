@@ -13,20 +13,38 @@ datasource db {
   // PrismaClient via a driver adapter at runtime (see src/lib/prisma.ts).
 }
 
+enum ClubStatus {
+  PENDING // requested, awaiting platform admin approval
+  ACTIVE
+  REJECTED
+  SUSPENDED // reversible off-switch for a club (admin only)
+}
+
 model Club {
-  id        String   @id @default(cuid())
-  name      String
-  logoUrl   String?
-  settings  Json     @default("{}")
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique // human-readable URL segment: /{slug}/dashboard
+  status      ClubStatus @default(PENDING)
+  description String?
+  logoUrl     String?
+  settings    Json       @default("{}")
   // settings shape: { duesAmount: number, currency: string ("NGN"),
   //                   currentPeriod: string (e.g. "2026/2027"),
-  //                   departments: string[], committees: string[] }
+  //                   departments: string[], committees: string[],
+  //                   membershipOpen: boolean }
+
+  // Lifecycle: who asked for this club, and when an admin approved it.
+  requestedById String? // User.id of the creator (no FK: purely informational)
+  approvedAt    DateTime?
+
   memberships Membership[]
   events      Event[]
   dues        DuesRecord[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([status])
 }
 
 model User {
@@ -35,6 +53,7 @@ model User {
   name               String
   passwordHash       String
   mustChangePassword Boolean @default(false)
+  isPlatformAdmin    Boolean @default(false)
   memberships        Membership[]
 
   createdAt DateTime @default(now())

@@ -8,6 +8,8 @@ export interface ClubSettings {
   currentPeriod: string;
   departments: string[];
   committees: string[];
+  /** Whether the club accepts self-service membership applications. */
+  membershipOpen: boolean;
 }
 
 const DEFAULT_SETTINGS: ClubSettings = {
@@ -16,15 +18,22 @@ const DEFAULT_SETTINGS: ClubSettings = {
   currentPeriod: "",
   departments: [],
   committees: [],
+  membershipOpen: true,
 };
 
 /**
- * Resolve the current club. v1 is single-tenant: there is exactly one club row.
- * Every query is scoped through here rather than hardcoding a club id inline,
- * so multi-club support can be added later without a rewrite.
+ * Resolve the current club.
+ *
+ * @deprecated Multi-club routing resolves the club from the `[clubSlug]` URL
+ * segment (see `lib/club-context.ts`). This remains only for the pages not yet
+ * migrated, and resolves to the oldest ACTIVE club so its behaviour stays
+ * deterministic now that more than one club row exists.
  */
 export const getCurrentClub = cache(async () => {
-  const club = await prisma.club.findFirst();
+  const club = await prisma.club.findFirst({
+    where: { status: "ACTIVE" },
+    orderBy: { createdAt: "asc" },
+  });
   if (!club) {
     throw new Error("No club configured. Run `npm run db:seed`.");
   }

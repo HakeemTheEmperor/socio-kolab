@@ -269,3 +269,62 @@ consistent with the conventions and note it here."
   mutating counters inside `map`, and the event detail page reads `new Date()`
   into a const rather than calling `Date.now()` inline. `npm run lint`,
   `tsc --noEmit`, and `next build` are all clean.
+
+## Multi-club step 1 — Schema, slugs, seed
+
+### Club lifecycle on the schema
+- `Club.slug` is `@unique` and carries no separate index: Postgres backs the
+  unique constraint with one, and slug lookup is the hot path.
+- `Club.requestedById` is a plain `String?`, not a relation, exactly as
+  `MULTI-CLUB.md` §1 writes it. A back-relation on `User` would buy nothing —
+  the field is informational (shown to the admin on the approval screen) and is
+  never traversed as a relation.
+- `Club.status` defaults to `PENDING`, so a club created by any path that
+  forgets to set it is invisible (404) rather than accidentally live.
+- `settings.membershipOpen` lives in the settings JSON (§1), defaulting to
+  `true` in `getClubSettings`, so clubs seeded or created before the toggle
+  existed accept applications rather than silently rejecting them.
+
+### The migration backfills, it does not assume an empty database
+- `slug` is added nullable, backfilled from `name` (lowercased,
+  non-alphanumeric runs collapsed to hyphens, trimmed to 30 chars), then made
+  `NOT NULL` + `UNIQUE`. Adding it as `NOT NULL` outright would fail on any
+  database that already has the seed club.
+- The backfill handles the two edge cases the unique index would otherwise trip
+  on: a name that collapses to fewer than 3 characters falls back to
+  `club-<id prefix>`, and clubs that derive the same slug get a numeric suffix
+  (oldest keeps the bare slug).
+- Pre-existing clubs predate the approval flow, so the backfill sets them
+  `ACTIVE` with `approvedAt = createdAt`.
+
+### Slug rules (`lib/slug.ts`)
+- One regex — `/^[a-z0-9]+(?:-[a-z0-9]+)*$/` — enforces the charset and rules
+  out leading, trailing, and doubled hyphens, rather than four separate checks.
+- `validateSlug` returns `{ ok: false, error }` instead of throwing: every call
+  site (the live-validation server action, the create form) wants to *show* the
+  reason, not catch an exception.
+- `slugify` is a suggestion helper only. It can return a string that
+  `validateSlug` rejects (e.g. `slugify("***") === ""`), and the caller is
+  expected to validate anyway — server-side validation is the boundary, and a
+  prefill that quietly rewrote itself into something valid-but-surprising would
+  be worse than an empty field.
+
+### Seed
+- Two ACTIVE clubs: **Demo Club** (`demo-club`, applications open, dues ₦2,000)
+  and **Beta Club** (`beta-club`, applications closed, dues ₦3,500, different
+  departments/committees) — the closed club is what exercises §5's toggle.
+- Users are keyed by **email**, so listing the same person in both clubs gives
+  them one account and two memberships. `ada.obi@club.test` is in both clubs
+  (exercises the switcher); `chidi.okafor@club.test` is in Demo Club only
+  (exercises cross-club isolation).
+- The memorable logins are preserved and extended:
+  `president@club.test` / `exec@club.test` for Demo Club,
+  `president@beta.test` / `exec@beta.test` for Beta Club,
+  `admin@platform.test` for the platform admin (no memberships), all
+  `password123`.
+
+### Interim state
+- `getCurrentClub()` is now `@deprecated` and resolves the **oldest ACTIVE**
+  club rather than `findFirst()` with no ordering. Step 2 replaces it with
+  slug-based resolution; until then, the ordering keeps the still-single-club
+  pages deterministically pointed at Demo Club now that two club rows exist.
