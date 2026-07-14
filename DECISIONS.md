@@ -578,3 +578,47 @@ and the club stays pending. The admin approves → the requester immediately rea
 `/chess-society/dashboard` and `/chess-society/settings` as PRESIDENT, and the
 club's register page opens to the public. Suspend → both 404 again, for the
 president too. Reactivate → live again.
+
+## Multi-club step 7 — Docs and final click-through
+
+### README
+Rewritten around multi-club: the URL table (global `/login`, `/clubs`,
+`/clubs/new`, `/admin`, `/{clubSlug}/…`), the club lifecycle
+(PENDING → ACTIVE → SUSPENDED, or REJECTED, with all invisible states collapsing
+to one 404), the applications toggle and what it does *not* gate (exec add, CSV
+import), the two-club seed with its admin and switcher/isolation accounts, and the
+importer's required `--club <slug>`.
+
+### Final click-through (against a running server, on a freshly seeded database)
+All of MULTI-CLUB §8, 21 checks, green:
+
+- an unknown slug 404s (PENDING / REJECTED / SUSPENDED were each driven live in
+  step 6 and share the single `getClubBySlug` gate);
+- a Demo Club president asking for Beta's dashboard gets 307 → `/clubs`, and the
+  response body contains no Beta data;
+- a Beta event id and a Beta membership id both 404 under `/demo-club`, and vice
+  versa;
+- the dual-club user sees both clubs on `/clubs`; the single-club user is
+  auto-forwarded to their dashboard;
+- Beta (closed) shows the closed page with no form, Demo (open) shows the form;
+- an existing member is told he's already a member instead of getting a form;
+- `/admin` is 404 for a member and 200 for the admin, listing both clubs;
+- `/clubs/new` is reachable when signed in.
+
+The action-level equivalents (a club B exec invoking an action against a club A
+resource; a forged POST at a club with applications closed; reserved, malformed
+and duplicate slugs; approve/suspend/reactivate) were each driven live in steps
+3, 5 and 6 respectively.
+
+`next build` passes with zero TypeScript errors, and `npm run lint` is clean.
+
+### CSV importer
+Verified: it refuses a missing `--club`, refuses an unknown slug, and imports into
+Beta Club *while Beta's applications are closed* — the toggle gates self-service
+applications, not roster management.
+
+### One environment note, not an app issue
+Killing the Next dev server mid-write on Windows can leave `.next` corrupt; the
+symptom is every route (including `/api/auth/*`) 404ing, or a Turbopack panic
+(`0xc0000142`). `rm -rf .next` and restart. Production builds were unaffected
+throughout.
