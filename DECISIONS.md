@@ -653,13 +653,80 @@ two fixed constants) cannot come out in a different case than the derived tokens
 Success/danger/warning/info base hues are frozen; only their tints are re-mixed
 against the club background, so "Unpaid" is red on white and on near-black alike.
 
-### Deps: `colord` + `vitest`
+### Deps: `colord` + `vitest` (step 1)
 `colord` (~2kb, the spec's preferred option) with its `a11y` (WCAG luminance and
 contrast) and `mix` plugins. The project had **no test runner** at all, so step 1's
 "with unit tests" requirement adds **vitest** as a dev dependency (`npm test`).
 26 tests cover: light background, dark background (red-on-black), the `--primary-fg`
 flip in both directions, semantic constancy, tint re-mixing, invalid input, and each
 validation branch.
+
+## UI refactor step 2 — Token injection and shadcn wiring
+
+### Tailwind v4 has no config file, so the tokens live in `@theme`
+§A4 says "extend the Tailwind config with `colors: {…}`". There is no
+`tailwind.config.js` in this project — Tailwind v4 declares its scale in CSS. The
+equivalent is an `@theme inline` block in `globals.css` mapping `--color-*` to the
+generated tokens, which produces exactly the utilities the spec asks for
+(`bg-primary`, `bg-surface`, `border-border`).
+
+### shadcn's names keep their meaning; the club's accent becomes `brand-*`
+The token names in §A2 collide with shadcn's, and two of the collisions are traps:
+shadcn's `--accent` is its *hover/active surface* (used by 26 components) and its
+`--muted` is a *surface*, not muted text. Re-pointing `bg-accent` at the club's
+amber would have turned every dropdown hover amber.
+
+So the mapping preserves shadcn's semantics and the club's accent is exposed under
+a different **utility** prefix (the CSS variable is still `--accent`, per spec):
+
+| shadcn variable | token | | club accent |
+|---|---|---|---|
+| `--background` | `--bg` | | `bg-brand` |
+| `--card`, `--popover` | `--surface` | | `bg-brand-tint` |
+| `--muted`, `--secondary`, `--accent` | `--surface-hover` | | `text-brand-fg` |
+| `--muted-foreground` | `--text-muted` | | |
+| `--destructive` | `--danger` | | |
+| `--ring` | `--primary` (C3's focus-ring rule, for free) | | |
+
+The payoff: the 93 existing `text-muted-foreground` and 33 `bg-muted` usages became
+token-driven with no edit at all, which is most of the step-3 sweep already done.
+`bg-accent` in a component still means "hover surface" and is correct as written.
+
+### There is no `.dark` class any more
+Dark mode used to be a `.dark` variant block (shadcn's default, driven by
+`next-themes`). It is deleted: light vs. dark is now a *property of the club's
+background luminance*, computed inside `generateTheme`, so the same tokens serve
+both and a `dark:` variant would fight the theme rather than serve it. The
+`@custom-variant dark` declaration stays only so the handful of leftover `dark:`
+classes still compile until the step-3 sweep removes them; nothing sets the class.
+
+### Injection: root layout defaults, `[clubSlug]` layout overrides
+Rather than adding a `generateTheme` call to each of `/login`, `/clubs`,
+`/clubs/new` and `/admin` (§A4), the **root** layout injects the platform default
+once, and the new `app/[clubSlug]/layout.tsx` injects the club's tokens. Layouts
+nest, so the club block lands after the default in document order and wins the
+cascade at equal specificity. The guarantee the spec wants holds by construction:
+a club's `<style>` only ever exists inside `/{clubSlug}/`, so it cannot leak onto a
+platform page — and any *future* non-club route is themed correctly by default
+rather than by remembering to add a call.
+
+`app/[clubSlug]/layout.tsx` is new (only `(member)/layout.tsx` existed). It sits
+*above* `(member)`, which is what themes the public `/{clubSlug}/register` page.
+`getClubBySlug` is `cache()`d, so it adds no query.
+
+### `globals.css` carries a static copy of the default tokens
+The `:root` block duplicates `generateTheme`'s default output as a fallback for
+anything that renders outside a layout. To stop the copy drifting, a unit test
+parses `globals.css` and asserts every token equals the function's output.
+
+### Verified against a running server
+With Demo Club's theme set to `#0A0A0A / #DC2626 / #F97316` in its settings JSON:
+`/demo-club/register` (a *public*, club-scoped page) serves `--bg:#0a0a0a`,
+`--text:#f8fafc`, `--primary:#dc2626` — and the platform default block still
+precedes it, so the cascade order is right. `--danger` stays `#dc2626` while
+`--danger-tint` re-mixes to `#24140f` for the dark background. `/login` serves the
+indigo default regardless. Removing the `theme` key returns the club to the default
+immediately.
 
 ### One environment note, not an app issue
 Killing the Next dev server mid-write on Windows can leave `.next` corrupt; the

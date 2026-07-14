@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { colord, extend } from "colord";
 import a11yPlugin from "colord/plugins/a11y";
@@ -157,6 +158,27 @@ describe("generateTheme — invalid input", () => {
   it("falls back to the platform default rather than throwing", () => {
     const t = generateTheme("not-a-color", DEFAULT_THEME.primary, DEFAULT_THEME.accent);
     expect(t["--bg"]).toBe("#f8fafc");
+  });
+});
+
+describe("globals.css fallback", () => {
+  it("declares exactly the platform default tokens generateTheme produces", () => {
+    const css = readFileSync("src/app/globals.css", "utf8");
+    const root = css.match(/^:root \{$([\s\S]*?)^\}$/m)?.[1] ?? "";
+    const declared = Object.fromEntries(
+      [...root.matchAll(/^\s*(--[\w-]+):\s*([^;]+);/gm)].map(([, k, v]) => [k, v.trim()]),
+    );
+
+    const expected = generateTheme(
+      DEFAULT_THEME.background,
+      DEFAULT_THEME.primary,
+      DEFAULT_THEME.accent,
+    );
+    for (const [token, value] of Object.entries(expected)) {
+      expect(declared[token], `globals.css is missing or has drifted on ${token}`).toBe(
+        value,
+      );
+    }
   });
 });
 

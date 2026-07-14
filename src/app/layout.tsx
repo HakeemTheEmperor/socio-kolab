@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { ThemeStyle } from "@/components/theme-style";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,6 +30,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        {/* Platform default theme. The `[clubSlug]` layout re-injects the club's
+            own tokens below this, overriding it inside club scope only. */}
+        <ThemeStyle />
         {children}
         <Toaster />
       </body>
