@@ -6,7 +6,10 @@ import { prisma } from "@/lib/prisma";
 import { getClubSettings } from "@/lib/club";
 import { requireClubAccess } from "@/lib/club-context";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
+import { ArrowLeft, CalendarDays, Wallet } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
+import { EmptyState } from "@/components/empty-state";
+import { Avatar } from "@/components/date-block";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -69,77 +72,85 @@ export default async function MemberDetailPage({
   const canViewFull = isExec || isSelf;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Link
-            href={`/${clubSlug}/members`}
-            className="text-sm text-muted-foreground hover:underline"
-          >
-            ← Members
-          </Link>
-          <h1 className="mt-1 text-2xl font-semibold">{member.user.name}</h1>
-          <div className="mt-1 flex items-center gap-2">
-            <Badge variant="secondary">{member.role}</Badge>
-            <StatusBadge status={member.status} />
-          </div>
-        </div>
-      </div>
+    <div className="space-y-8">
+      <Link
+        href={`/${clubSlug}/members`}
+        className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft aria-hidden strokeWidth={1.75} className="size-4" />
+        Members
+      </Link>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Profile</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Department" value={member.department ?? "—"} />
-          <Field label="Level" value={member.level ?? "—"} />
-          <Field label="Committee" value={member.committee ?? "—"} />
-          <Field label="Joined" value={formatDate(member.joinedAt)} />
-          {canViewFull ? (
-            <>
-              <Field label="Email" value={member.user.email} />
-              <Field label="Phone" value={member.phone ?? "—"} />
-            </>
+      {/* Two columns on desktop: who they are on the left, what they've done on
+          the right. Stacked on mobile (§C2). */}
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="space-y-4 p-6">
+              <div className="flex items-center gap-3">
+                <Avatar name={member.user.name} className="size-12 text-sm" />
+                <div className="min-w-0">
+                  <h1 className="truncate text-[15px] font-medium">
+                    {member.user.name}
+                  </h1>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <Badge variant="secondary">{member.role}</Badge>
+                    <StatusBadge status={member.status} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2 lg:grid-cols-1">
+                <Field label="Department" value={member.department ?? "—"} />
+                <Field label="Level" value={member.level ?? "—"} />
+                <Field label="Committee" value={member.committee ?? "—"} />
+                <Field label="Joined" value={formatDate(member.joinedAt)} />
+                {canViewFull ? (
+                  <>
+                    <Field label="Email" value={member.user.email} />
+                    <Field label="Phone" value={member.phone ?? "—"} />
+                  </>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+
+          {isExec || isPresident ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-[15px]">Manage member</CardTitle>
+                <CardDescription>
+                  {isPresident
+                    ? "Change status, committee, or role."
+                    : "Change status or committee."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <EditMemberControls
+                  membershipId={member.id}
+                  isSelf={isSelf}
+                  canEditStatus={isExec}
+                  canEditRole={isPresident}
+                  committees={settings.committees}
+                  status={member.status}
+                  committee={member.committee}
+                  role={member.role}
+                />
+              </CardContent>
+            </Card>
           ) : null}
-        </CardContent>
-      </Card>
+        </div>
 
-      {isExec || isPresident ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Manage member</CardTitle>
-            <CardDescription>
-              {isPresident
-                ? "Change status, committee, or role."
-                : "Change status or committee."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <EditMemberControls
-              membershipId={member.id}
-              isSelf={isSelf}
-              canEditStatus={isExec}
-              canEditRole={isPresident}
-              committees={settings.committees}
-              status={member.status}
-              committee={member.committee}
-              role={member.role}
-            />
-          </CardContent>
-        </Card>
-      ) : null}
-
+        <div className="space-y-6">
       {canViewFull ? (
         <>
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Dues history</CardTitle>
+              <CardTitle className="text-[15px]">Dues history</CardTitle>
             </CardHeader>
             <CardContent>
               {member.dues.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No dues recorded yet.
-                </p>
+                <EmptyState icon={Wallet} message="No dues recorded yet." />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
@@ -173,13 +184,11 @@ export default async function MemberDetailPage({
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Attendance history</CardTitle>
+              <CardTitle className="text-[15px]">Attendance history</CardTitle>
             </CardHeader>
             <CardContent>
               {member.attendance.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No event activity yet.
-                </p>
+                <EmptyState icon={CalendarDays} message="No event activity yet." />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
@@ -215,12 +224,14 @@ export default async function MemberDetailPage({
         </>
       ) : (
         <Card>
-          <CardContent className="py-6 text-sm text-muted-foreground">
+          <CardContent className="p-6 text-[13px] text-muted-foreground">
             You can only view full details (contact info, dues, attendance) for
             your own profile.
           </CardContent>
         </Card>
       )}
+        </div>
+      </div>
     </div>
   );
 }

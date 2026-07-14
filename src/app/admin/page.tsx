@@ -5,7 +5,9 @@ import { signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformAdmin } from "@/lib/admin";
 import { formatDate } from "@/lib/format";
+import { Inbox } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -70,17 +72,19 @@ export default async function AdminPage() {
     await signOut({ redirectTo: "/login" });
   }
 
+  // Deliberately plain: this page is for the platform operator, not for members.
+  // Clean defaults, no shell, no theming beyond the platform default (§C2).
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-10">
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+    <main className="mx-auto w-full max-w-4xl px-6 py-8">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
         <div>
-          <h1 className="text-2xl font-semibold">Platform admin</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-lg font-medium">Platform admin</h1>
+          <p className="text-[13px] text-muted-foreground">
             Signed in as {admin.email} · club lifecycle only
           </p>
         </div>
         <form action={doSignOut}>
-          <Button variant="outline" type="submit">
+          <Button variant="outline" size="sm" type="submit">
             Sign out
           </Button>
         </form>
@@ -98,9 +102,7 @@ export default async function AdminPage() {
         </CardHeader>
         <CardContent>
           {pending.length === 0 ? (
-            <p className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-              No club requests waiting.
-            </p>
+            <EmptyState icon={Inbox} message="No club requests waiting." />
           ) : (
             <div className="overflow-x-auto">
               <Table>

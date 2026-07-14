@@ -4,9 +4,11 @@ import { useParams } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { CheckCircle2 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/date-block";
 import { toggleCheckIn } from "../actions";
 
 export type CheckInMember = {
@@ -73,39 +75,40 @@ export function CheckInList({
       {filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground">No members match.</p>
       ) : (
-        <ul className="divide-y rounded-md border">
+        <ul className="divide-y divide-border rounded-xl border border-border">
           {filtered.map((m) => (
             <li
               key={m.membershipId}
-              className="flex items-center justify-between gap-3 p-3"
+              className="flex items-center gap-3 p-4"
             >
-              <div className="min-w-0">
-                <p className="truncate font-medium">{m.name}</p>
-                <p className="truncate text-sm text-muted-foreground">
+              <Avatar name={m.name} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{m.name}</p>
+                <p className="truncate text-[13px] text-muted-foreground">
                   {m.department ?? "—"}
-                  {m.rsvp ? (
-                    <>
-                      {" · "}
-                      <span>RSVP: {m.rsvp.replace("_", " ").toLowerCase()}</span>
-                    </>
-                  ) : null}
+                  {m.rsvp
+                    ? ` · RSVP: ${m.rsvp.replace("_", " ").toLowerCase()}`
+                    : ""}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                {checked[m.membershipId] ? (
-                  <Badge variant="success">
-                    Checked in
-                  </Badge>
-                ) : null}
-                <Button
-                  size="sm"
-                  variant={checked[m.membershipId] ? "outline" : "default"}
-                  disabled={pendingId === m.membershipId}
-                  onClick={() => toggle(m.membershipId)}
-                >
-                  {checked[m.membershipId] ? "Undo" : "Check in"}
-                </Button>
-              </div>
+              {checked[m.membershipId] ? (
+                <span className="inline-flex items-center gap-1.5 text-[13px] text-success-tint-fg">
+                  <CheckCircle2
+                    aria-hidden
+                    strokeWidth={1.75}
+                    className="size-4 shrink-0"
+                  />
+                  Checked in
+                </span>
+              ) : null}
+              <Button
+                size="sm"
+                variant={checked[m.membershipId] ? "outline" : "default"}
+                disabled={pendingId === m.membershipId}
+                onClick={() => toggle(m.membershipId)}
+              >
+                {checked[m.membershipId] ? "Undo" : "Check in"}
+              </Button>
             </li>
           ))}
         </ul>

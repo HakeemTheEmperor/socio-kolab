@@ -5,7 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { getClubSettings } from "@/lib/club";
 import { requireClubAccess } from "@/lib/club-context";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -13,29 +12,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { StatCard } from "@/components/stat-card";
+import { EmptyState } from "@/components/empty-state";
+import { DateBlock } from "@/components/date-block";
+import { CalendarCheck, CalendarDays, CheckCircle2, Clock, TriangleAlert, Users, Wallet } from "lucide-react";
 import { RsvpButtons } from "../events/rsvp-buttons";
 
 export const metadata: Metadata = { title: "Dashboard — Club Portal" };
-
-function StatCard({
-  label,
-  value,
-  href,
-}: {
-  label: string;
-  value: string;
-  href?: string;
-}) {
-  const body = (
-    <Card className={href ? "transition-colors hover:border-foreground/30" : ""}>
-      <CardContent className="py-4">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <p className="mt-1 text-2xl font-semibold">{value}</p>
-      </CardContent>
-    </Card>
-  );
-  return href ? <Link href={href}>{body}</Link> : body;
-}
 
 export default async function DashboardPage({
   params,
@@ -91,7 +74,7 @@ export default async function DashboardPage({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <p className="text-[15px] font-medium">
           Welcome, {me.user.name.split(" ")[0]}
@@ -101,95 +84,112 @@ export default async function DashboardPage({
         </p>
       </div>
 
+      {/* The member's own dues status: one banner, not a card to hunt for (§C2). */}
+      {myDues ? (
+        <div className="flex items-start gap-3 rounded-xl border border-success/30 bg-success-tint p-6">
+          <CheckCircle2
+            aria-hidden
+            strokeWidth={1.75}
+            className="mt-0.5 size-5 shrink-0 text-success-tint-fg"
+          />
+          <div className="text-success-tint-fg">
+            <p className="text-[15px] font-medium">Paid for {period}</p>
+            <p className="text-[13px] opacity-90">
+              {formatCurrency(myDues.amount, settings.currency)} ·{" "}
+              {formatDate(myDues.paidAt)}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger-tint p-6">
+          <TriangleAlert
+            aria-hidden
+            strokeWidth={1.75}
+            className="mt-0.5 size-5 shrink-0 text-danger-tint-fg"
+          />
+          <div className="text-danger-tint-fg">
+            <p className="text-[15px] font-medium">Unpaid for {period}</p>
+            <p className="text-[13px] opacity-90">
+              Dues of {formatCurrency(settings.duesAmount, settings.currency)} are
+              outstanding — see the treasurer to pay.
+            </p>
+          </div>
+        </div>
+      )}
+
       {stats ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Active members" value={String(stats.activeCount)} />
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard
+            label="Active members"
+            value={String(stats.activeCount)}
+            icon={Users}
+          />
           <StatCard
             label="Pending approvals"
             value={String(stats.pendingCount)}
+            icon={Clock}
             href={`/${clubSlug}/members`}
+            tone={stats.pendingCount > 0 ? "warning" : "default"}
           />
           <StatCard
             label="Dues paid"
             value={`${stats.pctPaid}%`}
+            icon={Wallet}
             href={`/${clubSlug}/dues`}
           />
           <StatCard
             label="Next event RSVPs"
             value={String(stats.nextEventGoing)}
+            icon={CalendarCheck}
           />
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Your dues</CardTitle>
-            <CardDescription>{period}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {myDues ? (
-              <div className="space-y-1">
-                <Badge variant="success">
-                  Paid
-                </Badge>
-                <p className="text-sm text-muted-foreground">
-                  {formatCurrency(myDues.amount, settings.currency)} ·{" "}
-                  {formatDate(myDues.paidAt)}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                <Badge variant="danger">Unpaid</Badge>
-                <p className="text-sm text-muted-foreground">
-                  Dues of {formatCurrency(settings.duesAmount, settings.currency)}{" "}
-                  are outstanding for this period.
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[15px] font-medium">Upcoming events</h2>
+          <Link
+            href={`/${clubSlug}/events`}
+            className="text-[13px] text-muted-foreground hover:text-foreground"
+          >
+            All events
+          </Link>
+        </div>
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Upcoming events</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {events.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No upcoming events.
-              </p>
-            ) : (
-              events.map((e) => (
-                <div key={e.id} className="rounded-md border p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <Link
-                        href={`/${clubSlug}/events/${e.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {e.title}
-                      </Link>
-                      <p className="text-sm text-muted-foreground">
-                        {formatDateTime(e.startsAt)}
-                        {e.location ? ` · ${e.location}` : ""}
-                      </p>
-                    </div>
-                    <Badge variant="secondary">{e.goingCount} going</Badge>
-                  </div>
-                  <div className="mt-3">
-                    <RsvpButtons eventId={e.id} current={e.myRsvp} />
-                  </div>
+        {events.length === 0 ? (
+          <div className="rounded-xl border border-border bg-surface">
+            <EmptyState icon={CalendarDays} message="No upcoming events." />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {events.map((e) => (
+              <div
+                key={e.id}
+                className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-surface p-6"
+              >
+                <DateBlock date={e.startsAt} />
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/${clubSlug}/events/${e.id}`}
+                    className="text-[15px] font-medium hover:underline"
+                  >
+                    {e.title}
+                  </Link>
+                  <p className="text-[13px] text-muted-foreground">
+                    {formatDateTime(e.startsAt)}
+                    {e.location ? ` · ${e.location}` : ""} · {e.goingCount} going
+                  </p>
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                <RsvpButtons eventId={e.id} current={e.myRsvp} />
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Your profile</CardTitle>
+          <CardTitle className="text-[15px]">Your profile</CardTitle>
           <CardDescription>
             <Link href={`/${clubSlug}/profile`} className="underline">
               Edit profile
@@ -197,22 +197,17 @@ export default async function DashboardPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <p className="text-xs uppercase text-muted-foreground">Department</p>
-            <p>{me.department ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase text-muted-foreground">Level</p>
-            <p>{me.level ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase text-muted-foreground">Committee</p>
-            <p>{me.committee ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase text-muted-foreground">Phone</p>
-            <p>{me.phone ?? "—"}</p>
-          </div>
+          {[
+            ["Department", me.department],
+            ["Level", me.level],
+            ["Committee", me.committee],
+            ["Phone", me.phone],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <p className="text-[13px] text-muted-foreground">{label}</p>
+              <p>{value ?? "—"}</p>
+            </div>
+          ))}
         </CardContent>
       </Card>
     </div>

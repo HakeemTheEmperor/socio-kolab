@@ -15,18 +15,32 @@ export const metadata: Metadata = { title: "Sign in — Club Portal" };
 // user belongs to. Which club they land in is decided at /clubs.
 export default function LoginPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Sign in</CardTitle>
-          <CardDescription>
-            Enter your email and password to access your clubs.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <LoginForm />
-        </CardContent>
-      </Card>
+    <main className="flex min-h-screen items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md space-y-6">
+        {/* The platform's own wordmark — never a club's (§C2). This page is
+            outside club scope, so it renders the default theme. */}
+        <div className="flex items-center justify-center gap-2">
+          <span
+            aria-hidden
+            className="grid size-8 place-items-center rounded-md bg-primary text-sm font-semibold text-primary-fg"
+          >
+            C
+          </span>
+          <span className="text-[15px] font-medium">Club Portal</span>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-2xl">Sign in</CardTitle>
+            <CardDescription>
+              Enter your email and password to access your clubs.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LoginForm />
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }

@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireClubAccess } from "@/lib/club-context";
 import { formatDateTime, toDateTimeLocal } from "@/lib/format";
+import { ArrowLeft } from "lucide-react";
+import { Avatar, DateBlock } from "@/components/date-block";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -81,20 +83,26 @@ export default async function EventDetailPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <Link
             href={`/${clubSlug}/events`}
-            className="text-sm text-muted-foreground hover:underline"
+            className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground"
           >
-            ← Events
+            <ArrowLeft aria-hidden strokeWidth={1.75} className="size-4" />
+            Events
           </Link>
-          <h1 className="mt-1 text-2xl font-semibold">{event.title}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {formatDateTime(event.startsAt)}
-            {event.endsAt ? ` – ${formatDateTime(event.endsAt)}` : ""}
-            {event.location ? ` · ${event.location}` : ""}
-            {!upcoming ? " · Past event" : ""}
-          </p>
+          <div className="mt-3 flex items-start gap-4">
+            <DateBlock date={event.startsAt} />
+            <div className="min-w-0">
+              <h1 className="text-2xl font-semibold">{event.title}</h1>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                {formatDateTime(event.startsAt)}
+                {event.endsAt ? ` – ${formatDateTime(event.endsAt)}` : ""}
+                {event.location ? ` · ${event.location}` : ""}
+                {!upcoming ? " · Past event" : ""}
+              </p>
+            </div>
+          </div>
         </div>
         {isExec ? (
           <div className="flex gap-2">
@@ -136,25 +144,29 @@ export default async function EventDetailPage({
         <CardHeader>
           <CardTitle className="text-base">RSVPs</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-3">
+        <CardContent className="grid gap-6 sm:grid-cols-3">
           {GROUPS.map((g) => {
             const list = event.attendance.filter((a) => a.rsvp === g.key);
             return (
               <div key={g.key}>
-                <p className="mb-2 text-sm font-medium">
+                <p className="mb-3 text-[13px] font-medium text-muted-foreground">
                   {g.label} ({list.length})
                 </p>
                 {list.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">—</p>
+                  <p className="text-[13px] text-muted-foreground">Nobody yet.</p>
                 ) : (
-                  <ul className="space-y-1 text-sm">
+                  <ul className="space-y-2">
                     {list.map((a) => (
                       <li key={a.id} className="flex items-center gap-2">
-                        <span>{a.membership.user.name}</span>
+                        <Avatar
+                          name={a.membership.user.name}
+                          className="size-7 text-[10px]"
+                        />
+                        <span className="min-w-0 flex-1 truncate text-sm">
+                          {a.membership.user.name}
+                        </span>
                         {a.checkedInAt ? (
-                          <Badge variant="success">
-                            in
-                          </Badge>
+                          <Badge variant="success">In</Badge>
                         ) : null}
                       </li>
                     ))}

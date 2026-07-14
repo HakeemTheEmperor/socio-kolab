@@ -7,6 +7,7 @@ import { ChevronsUpDown, LayoutGrid, LogOut, KeyRound, UserRound } from "lucide-
 import { cn } from "@/lib/utils";
 import { initials } from "@/lib/format";
 import { navItems } from "./nav";
+import { ClubMark } from "@/components/club-mark";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,33 +40,6 @@ export type SidebarProps = {
   /** Mobile: close the slide-over after navigating (UI-REFACTOR §B3). */
   onNavigate?: () => void;
 };
-
-/** The club logo, or a colored square with its initial. */
-function ClubMark({ club, className }: { club: ShellClub; className?: string }) {
-  if (club.logoUrl) {
-    // Club logos are arbitrary external URLs; next/image would need each host
-    // allow-listed in next.config.
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={club.logoUrl}
-        alt=""
-        className={cn("size-8 shrink-0 rounded-md object-cover", className)}
-      />
-    );
-  }
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "grid size-8 shrink-0 place-items-center rounded-md bg-primary text-sm font-semibold text-primary-fg",
-        className,
-      )}
-    >
-      {club.name.charAt(0).toUpperCase()}
-    </span>
-  );
-}
 
 function ClubSwitcher({
   club,
@@ -247,4 +221,3 @@ export function Sidebar({
   );
 }
 
-export { ClubMark };
