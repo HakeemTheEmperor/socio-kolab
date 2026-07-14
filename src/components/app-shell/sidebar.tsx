@@ -18,6 +18,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -93,24 +94,30 @@ function ClubSwitcher({
         align="start"
         className="w-56"
       >
-        <DropdownMenuLabel>Switch club</DropdownMenuLabel>
-        {otherClubs.map((other) => (
-          <DropdownMenuItem
-            key={other.slug}
-            render={
-              <Link
-                href={`/${other.slug}/dashboard`}
-                onClick={onNavigate}
+        {/* The label is a *group part*: Base UI reads it through MenuGroupContext
+            and throws outright without a surrounding Group. It also earns its keep
+            here — the group is what ties the label to the clubs it names, so a
+            screen reader announces them together. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Switch club</DropdownMenuLabel>
+          {otherClubs.map((other) => (
+            <DropdownMenuItem
+              key={other.slug}
+              render={
+                <Link
+                  href={`/${other.slug}/dashboard`}
+                  onClick={onNavigate}
+                />
+              }
+            >
+              <ClubMark
+                club={other}
+                className="size-5 rounded text-[10px]"
               />
-            }
-          >
-            <ClubMark
-              club={other}
-              className="size-5 rounded text-[10px]"
-            />
-            <span className="truncate">{other.name}</span>
-          </DropdownMenuItem>
-        ))}
+              <span className="truncate">{other.name}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           render={

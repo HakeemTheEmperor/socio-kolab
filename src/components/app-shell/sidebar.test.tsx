@@ -26,14 +26,17 @@ beforeEach(() => {
   document.body.appendChild(container);
 });
 
-function render(signOut: () => Promise<void>) {
+function render(
+  signOut: () => Promise<void>,
+  otherClubs: { slug: string; name: string; logoUrl: string | null }[] = [],
+) {
   root = createRoot(container);
   act(() => {
     root.render(
       <Sidebar
         club={club}
         user={user}
-        otherClubs={[]}
+        otherClubs={otherClubs}
         pendingCount={0}
         signOut={signOut}
       />,
@@ -101,5 +104,34 @@ describe("Sidebar user menu", () => {
     await act(async () => {});
 
     expect(signOut, "the server action actually fires").toHaveBeenCalled();
+  });
+});
+
+/**
+ * The switcher only becomes a dropdown for a user who belongs to more than one
+ * club — with a single club it degrades to a plain link. Every test above passes
+ * `otherClubs: []`, so the dropdown branch went unexercised, and it shipped
+ * throwing: its label is a Base UI *group part*, which crashes outside a Group.
+ */
+describe("Sidebar club switcher", () => {
+  const beta = { slug: "beta-club", name: "Beta Club", logoUrl: null };
+
+  it("is a plain link to /clubs when there is nothing to switch to", () => {
+    render(vi.fn());
+
+    expect(byText("Demo Club")?.getAttribute("href")).toBe("/clubs");
+  });
+
+  it("opens a menu listing the user's other clubs", () => {
+    render(vi.fn(), [beta]);
+
+    const trigger = byText("Demo Club");
+    expect(trigger, "switcher trigger").toBeTruthy();
+    click(trigger!);
+
+    expect(byText("Switch club"), "the group label renders").toBeTruthy();
+    const other = byText("Beta Club");
+    expect(other, "the other club is listed").toBeTruthy();
+    expect(other!.getAttribute("href")).toBe("/beta-club/dashboard");
   });
 });
