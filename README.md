@@ -75,13 +75,33 @@ self-service applications, not the club's own roster management.
 
 ## Environment variables
 
-The app runs with only these two variables. Copy `.env.example` to `.env` and
-fill them in:
+Locally the app runs on two variables. Copy `.env.example` to `.env` and fill
+them in:
 
 | Variable | Description |
 |---|---|
-| `DATABASE_URL` | PostgreSQL connection string. For **Supabase**, use the direct (port 5432) connection for migrations, not the pooled one. |
+| `DATABASE_URL` | PostgreSQL connection string, used by the app at runtime. On Supabase, the **pooled** URL — see below. |
 | `AUTH_SECRET` | Secret for Auth.js JWT/session signing. Generate with `npx auth secret` or `openssl rand -base64 32`. |
+
+Two more exist for Supabase only. Leave them unset locally and nothing changes:
+
+| Variable | Description |
+|---|---|
+| `IS_SUPABASE` | Set to `"true"` to switch the Prisma CLI over to `DIRECT_URL`. Unset, the CLI uses `DATABASE_URL`. |
+| `DIRECT_URL` | Required when `IS_SUPABASE=true`: where migrations and seeds run. |
+
+Supabase splits into two connection strings because the app and the Prisma CLI
+want opposite things:
+
+- **The app** (`DATABASE_URL`) wants a **pooler**. Serverless opens a connection
+  per cold start, and a pooler is what survives that churn — the transaction
+  pooler (port 6543) on Vercel/Netlify, the session pooler (5432) on a
+  long-lived server. Supabase's direct connection is IPv6-only unless you buy
+  the IPv4 add-on, so it usually can't be reached from Vercel at all.
+- **Migrations** (`DIRECT_URL`) want a **real session**: they take advisory locks
+  and run DDL. Pointed at the transaction pooler they hang on the lock rather
+  than failing cleanly, so `prisma.config.ts` rejects a `DIRECT_URL` on port
+  6543 outright.
 
 ```bash
 cp .env.example .env
@@ -155,14 +175,27 @@ A sample file is provided at [`scripts/members.sample.csv`](./scripts/members.sa
 npm run import:members -- --club demo-club scripts/members.sample.csv
 ```
 
-## Deployment (Vercel)
+## Deployment (Vercel + Supabase)
 
 1. Push to a Git repository and import the project into Vercel.
-2. Set `DATABASE_URL` and `AUTH_SECRET` in the Vercel project's environment
-   variables.
-3. Deploy. `postinstall` runs `prisma generate`; run `npm run db:deploy`
+2. In Supabase, open **Connect** and copy both connection strings.
+3. Set these in the Vercel project's environment variables:
+
+   | Variable | Value |
+   |---|---|
+   | `DATABASE_URL` | **Transaction pooler** (port 6543) — what the app connects through |
+   | `DIRECT_URL` | **Direct connection** (port 5432) — migrations only |
+   | `IS_SUPABASE` | `true` |
+   | `AUTH_SECRET` | `npx auth secret` |
+
+4. Deploy. `postinstall` runs `prisma generate`; run `npm run db:deploy`
    (`prisma migrate deploy`) against the production database as part of your
-   release process.
+   release process — with `IS_SUPABASE=true` it goes through `DIRECT_URL`
+   automatically.
+
+Running migrations from your own machine against production works the same way:
+set `IS_SUPABASE`, `DATABASE_URL` and `DIRECT_URL` in the shell, then
+`npm run db:deploy`.
 
 ## npm scripts
 
