@@ -470,3 +470,57 @@ Auto-forward (`/clubs` → 307 → `/demo-club/dashboard`) for the single-club
 president; no forward and both cards for the dual-club user; the PENDING-only
 user sees the awaiting-approval card with no dashboard link (and the club still
 refuses them); the platform admin, with no memberships, gets the empty state.
+
+## Multi-club step 5 — Club-scoped registration & the applications toggle
+
+### Two actions, not one form with a branch
+`/{clubSlug}/register` renders one of four states, chosen server-side:
+applications closed; signed out (create an account + a PENDING membership);
+signed in and already on this club's books (a message, no form); signed in and
+new to this club (profile fields only — "Apply to join").
+
+The signed-in path is a separate action (`joinClubAction`) rather than a flag on
+`registerAction`. They authenticate differently — one *creates* the identity, the
+other *reads* it from the session — and folding both into one action would mean a
+code path where `name`/`email`/`password` are sometimes present and sometimes
+must be ignored. An existing user applying to a second club never sends account
+fields at all, so they cannot be used to overwrite the account they're signed in
+with.
+
+### The toggle is enforced in the action, not the page
+`settings.membershipOpen` gates both actions through one helper
+(`clubAcceptingApplications`), which also re-resolves the club by slug. Hiding
+the form is presentation; a stale tab, a replayed form, or a hand-built POST must
+still be refused. Verified by doing exactly that (see below).
+
+Exec manual-add and the CSV import deliberately ignore the toggle — it gates
+self-service applications, not the club's own roster management.
+
+### One membership per (club, user), no re-applying
+An existing membership in this club — ACTIVE, PENDING, INACTIVE, or ALUMNI —
+blocks a new application (the DB's `@@unique([clubId, userId])` says the same
+thing). Re-applying must not be a way to launder a rejected or alumni membership
+back into PENDING; that decision belongs to an exec.
+
+### `registerSchema` still owns the account fields
+The signed-in path validates with a separate `joinClubSchema` (phone,
+department, level). Reusing `registerSchema` with the account fields made
+optional would have weakened the sign-up path's guarantees to serve the join path.
+
+### Verified against a running server
+- Beta Club (seeded closed) shows "Applications are currently closed", club name
+  and logo, no form; Demo Club still shows the form.
+- Flipping the switch through the real `updateSettings` action opens the register
+  page immediately; flipping it back closes it.
+- **Server-side rejection, no UI involved:** a hand-built POST that replays Demo's
+  registration form with the bound club slug forged to `beta-club` is refused —
+  "Beta Club is not accepting new members right now." — and no user row is
+  created. The identical replay against open Demo Club *succeeds* (PENDING
+  membership created), so the guard denies rather than the action being broken.
+  The same holds for `joinClubAction` submitted from a stale open form.
+- **Second club, one account:** `chidi.okafor@club.test` (Demo only) applies to
+  open Beta from a signed-in session → Beta gains a PENDING membership, the user
+  count does not change, and he appears in Beta's pending approvals.
+- **Duplicate guard:** he then sees "awaiting approval" instead of a form, and
+  submitting a valid join form captured from another user's session under his
+  own cookie returns "You already have a membership in Beta Club."

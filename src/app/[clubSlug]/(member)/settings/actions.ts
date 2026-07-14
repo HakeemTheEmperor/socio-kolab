@@ -22,13 +22,20 @@ export async function updateSettings(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
-  const { name, duesAmount, currency, currentPeriod, departments, committees } =
-    parsed.data;
+  const {
+    name,
+    duesAmount,
+    currency,
+    currentPeriod,
+    departments,
+    committees,
+    membershipOpen,
+  } = parsed.data;
 
   // De-duplicate list entries, preserving order.
   const uniq = (arr: string[]) => Array.from(new Set(arr));
 
-  // Settings this form doesn't own (membershipOpen) must survive the write.
+  // Spread the current settings first so any key this form doesn't own survives.
   const current = getClubSettings(club.settings);
 
   await prisma.club.update({
@@ -42,15 +49,18 @@ export async function updateSettings(
         currentPeriod,
         departments: uniq(departments),
         committees: uniq(committees),
+        membershipOpen,
       },
     },
   });
 
-  // Settings feed the dues dashboard, members filters, dashboard, and profile.
+  // Settings feed the dues dashboard, members filters, dashboard, and profile —
+  // and membershipOpen decides whether the register page shows a form at all.
   revalidatePath(`/${clubSlug}/settings`);
   revalidatePath(`/${clubSlug}/dues`);
   revalidatePath(`/${clubSlug}/members`);
   revalidatePath(`/${clubSlug}/dashboard`);
   revalidatePath(`/${clubSlug}/profile`);
+  revalidatePath(`/${clubSlug}/register`);
   return { ok: true };
 }

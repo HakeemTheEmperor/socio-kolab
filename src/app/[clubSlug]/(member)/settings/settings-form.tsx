@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { ListEditor } from "@/components/list-editor";
 import type { ClubSettings } from "@/lib/club";
 import { updateSettings } from "./actions";
@@ -28,6 +29,7 @@ export function SettingsForm({
   const [currentPeriod, setCurrentPeriod] = useState(settings.currentPeriod);
   const [departments, setDepartments] = useState<string[]>(settings.departments);
   const [committees, setCommittees] = useState<string[]>(settings.committees);
+  const [membershipOpen, setMembershipOpen] = useState(settings.membershipOpen);
 
   function submit() {
     startTransition(async () => {
@@ -38,6 +40,7 @@ export function SettingsForm({
         currentPeriod,
         departments,
         committees,
+        membershipOpen,
       });
       if (result.ok) {
         toast.success("Settings saved.");
@@ -101,6 +104,25 @@ export function SettingsForm({
           items={committees}
           onChange={setCommittees}
           placeholder="Add a committee…"
+        />
+      </div>
+
+      <div className="flex items-start justify-between gap-6 rounded-md border p-4">
+        <div className="space-y-1">
+          <Label htmlFor="membershipOpen">
+            Accept new membership applications
+          </Label>
+          <p className="text-sm text-muted-foreground">
+            When off, your club&apos;s registration link shows an
+            &ldquo;applications are closed&rdquo; message instead of a form. You
+            can still add members yourself.
+          </p>
+        </div>
+        <Switch
+          id="membershipOpen"
+          checked={membershipOpen}
+          onCheckedChange={setMembershipOpen}
+          disabled={pending}
         />
       </div>
 
