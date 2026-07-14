@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { ListSkeleton } from "@/components/page-skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EventFormDialog } from "./event-form-dialog";
+import { TopbarActions } from "@/components/app-shell/topbar-actions";
 import { RsvpButtons } from "./rsvp-buttons";
 
 export const metadata: Metadata = { title: "Events — Club Portal" };
@@ -104,10 +105,11 @@ async function EventsList({ clubSlug }: { clubSlug: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Events</h1>
-        {isExec ? <EventFormDialog /> : null}
-      </div>
+      {isExec ? (
+        <TopbarActions>
+          <EventFormDialog />
+        </TopbarActions>
+      ) : null}
 
       <Tabs defaultValue="upcoming">
         <TabsList>

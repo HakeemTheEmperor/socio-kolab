@@ -14,6 +14,14 @@ export function formatCurrency(amount: AmountLike, currency = "NGN"): string {
   }).format(Number(amount));
 }
 
+/** Up to two initials for an avatar square ("Ada Obi" → "AO"). */
+export function initials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  return (words[0][0] + (words.length > 1 ? words[words.length - 1][0] : ""))
+    .toUpperCase();
+}
+
 /** Date only, in Africa/Lagos (e.g. "12 Jul 2026"). SPEC §8. */
 export function formatDate(date: Date | string): string {
   return new Intl.DateTimeFormat(LOCALE, {

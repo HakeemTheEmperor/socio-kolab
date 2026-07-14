@@ -18,6 +18,7 @@ import {
 import { PeriodSelector } from "./period-selector";
 import { RecordPaymentDialog } from "./record-payment-dialog";
 import { ExportCsvButton, type DuesCsvRow } from "./export-csv-button";
+import { TopbarActions } from "@/components/app-shell/topbar-actions";
 
 export const metadata: Metadata = { title: "Dues — Club Portal" };
 
@@ -86,19 +87,15 @@ export default async function DuesPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Dues</h1>
-          <p className="text-muted-foreground">
-            {paidCount} of {activeMembers.length} active members paid ·{" "}
-            {formatCurrency(collected, settings.currency)} collected
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <PeriodSelector periods={periods} selected={selected} />
-          <ExportCsvButton rows={csvRows} period={selected} />
-        </div>
-      </div>
+      <TopbarActions>
+        <PeriodSelector periods={periods} selected={selected} />
+        <ExportCsvButton rows={csvRows} period={selected} />
+      </TopbarActions>
+
+      <p className="text-[13px] text-muted-foreground">
+        {paidCount} of {activeMembers.length} active members paid ·{" "}
+        {formatCurrency(collected, settings.currency)} collected
+      </p>
 
       {activeMembers.length === 0 ? (
         <div className="rounded-md border border-dashed p-10 text-center text-muted-foreground">

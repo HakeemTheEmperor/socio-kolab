@@ -93,10 +93,10 @@ export default async function DashboardPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">
+        <p className="text-[15px] font-medium">
           Welcome, {me.user.name.split(" ")[0]}
-        </h1>
-        <p className="text-muted-foreground">
+        </p>
+        <p className="text-[13px] text-muted-foreground">
           {club.name} · {period}
         </p>
       </div>

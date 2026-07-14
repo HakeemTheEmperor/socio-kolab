@@ -109,13 +109,10 @@ async function MembersDirectory({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Members</h1>
-        <p className="text-muted-foreground">
-          {members.length} member{members.length === 1 ? "" : "s"}
-          {isExec ? ` · dues period ${settings.currentPeriod}` : ""}
-        </p>
-      </div>
+      <p className="text-[13px] text-muted-foreground">
+        {members.length} member{members.length === 1 ? "" : "s"}
+        {isExec ? ` · dues period ${settings.currentPeriod}` : ""}
+      </p>
 
       {isExec && pending.length > 0 ? (
         <Card>

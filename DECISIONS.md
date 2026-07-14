@@ -781,3 +781,59 @@ the badge utilities resolving to the token variables
 (`.bg-success-tint{background-color:var(--success-tint)}`), and a running server
 serves the deepened inks for a dark club. `next build`, `npm run lint` and 46 unit
 tests are green.
+
+## UI refactor step 4 — App shell (sidebar, topbar, slide-over)
+
+### The page's action lives in the topbar, so the page portals it there
+§B4 puts each page's contextual primary action in the topbar, but the topbar is in
+the layout and the action needs the *page's* data — the dues period list and the
+CSV rows are fetched by `dues/page.tsx`. Hoisting the controls into the layout
+would mean the layout re-fetching each page's data just to render a button.
+
+So the topbar renders an empty `#topbar-actions` div and pages portal into it
+(`components/app-shell/topbar-actions.tsx`). Pages stay server components; only
+the action itself is client-side. The cost: the action mounts on hydration rather
+than appearing in the server HTML — fine for a button nobody can click before
+hydration, but it is the one part of the shell that HTML inspection cannot verify,
+so it has a **jsdom test** asserting the children land in the slot and nowhere
+else. Without it, a silent regression would cost an exec the "Create event" button.
+
+`useSyncExternalStore` marks the client-only render, not `useState` in an effect —
+the React Compiler's lint rules reject the latter, correctly.
+
+### Titles: the topbar owns the h1
+Every page's `<h1>` moved to the topbar, derived from the route (`nav.ts`
+`pageTitle`). The supporting line each page had under its heading (member count,
+"x of y paid", the user's email) stays in the body, demoted to 13px muted text per
+§C1. Detail pages (`members/[id]`, `events/[id]`) keep their own `<h1>` — it is the
+member's or event's *name*, which the topbar's section title ("Members") does not
+duplicate.
+
+### No "Add member" action, because there is no such feature
+§B4 lists Members → "Add member" for execs. The app has no manual add-member flow —
+members arrive by self-service registration or the CSV importer — and this refactor
+is explicitly not allowed to add business logic. The Members topbar therefore has no
+action. Events ("Create event") and Dues (period selector + "Export CSV") do.
+
+### Profile left the nav for the user menu
+§B2's nav is Dashboard / Members / Dues / Events / Settings; Profile is an item in
+the bottom user dropdown, next to "Change password" (which links to the same page's
+password card, now anchored `#password`) and "Sign out". The sign-out server action
+is passed from the layout into the client sidebar as a prop.
+
+### Badge counts are exec-only, and cost nothing for everyone else
+The Members nav badge counts PENDING applications. Only execs can act on them
+(`can(membership, "member:approve")`), so the layout only runs the count query for
+execs — a member's dashboard does not pay for a number they will never see.
+
+### Verified against a running server
+Signed in over the real credentials endpoint:
+- **President** (single club): all five nav items including Settings; the club block
+  is a plain link to `/clubs` (a dropdown with nothing to switch to would be a menu
+  that says nothing); pending badge shows 2.
+- **Exec**: no Settings item; badge shows 2.
+- **Member with two clubs** (`ada.obi@club.test`): no Dues, no Settings; the club
+  block is a dropdown listing Beta Club and "All clubs"; no pending badge.
+- Topbar renders `<h1>Dashboard</h1>`, the sidebar is 260px, the active nav item
+  carries `bg-primary-tint text-primary-tint-fg`, and the old horizontally-scrolling
+  header nav is gone.
