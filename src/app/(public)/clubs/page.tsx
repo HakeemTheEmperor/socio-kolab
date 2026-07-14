@@ -55,23 +55,34 @@ export default async function ClubsPage({
   const error = typeof params.error === "string" ? params.error : undefined;
   const notice = error ? NOTICES[error] : undefined;
 
+  // PENDING clubs are included so a user's own club request shows up here.
+  // REJECTED and SUSPENDED clubs are not: to their members they are simply gone,
+  // exactly as they are to the router (getClubBySlug 404s them).
   const memberships = await prisma.membership.findMany({
-    where: { userId: session.user.id, club: { status: "ACTIVE" } },
+    where: { userId: session.user.id, club: { status: { in: ["ACTIVE", "PENDING"] } } },
     include: { club: true },
     orderBy: { club: { name: "asc" } },
   });
 
-  const active = memberships.filter((m) => m.status === "ACTIVE");
-  const pending = memberships.filter((m) => m.status === "PENDING");
+  // Somewhere to go: an active membership in a club that is actually live.
+  const live = memberships.filter(
+    (m) => m.status === "ACTIVE" && m.club.status === "ACTIVE",
+  );
+  // Something to wait for: an exec hasn't approved you, or an admin hasn't
+  // approved the club you asked for.
+  const waiting = memberships.filter(
+    (m) => m.status === "PENDING" || m.club.status === "PENDING",
+  );
 
   // Auto-forward: one club to go to and nothing else to decide between, so the
   // switcher would be a page with a single button on it.
   //
   // Not when we're here to explain something (?error=…): the user asked for a
   // club they can't see, and silently landing them somewhere else — with the
-  // explanation dropped — is worse than one extra click.
-  if (!error && active.length === 1 && pending.length === 0) {
-    redirect(`/${active[0].club.slug}/dashboard`);
+  // explanation dropped — is worse than one extra click. And not while something
+  // is still pending, or the user would never see that it is.
+  if (!error && live.length === 1 && waiting.length === 0) {
+    redirect(`/${live[0].club.slug}/dashboard`);
   }
 
   async function doSignOut() {
@@ -110,11 +121,21 @@ export default async function ClubsPage({
       ) : (
         <ul className="space-y-3">
           {memberships.map((m) => {
-            const isActive = m.status === "ACTIVE";
+            // A club still awaiting a platform admin can't be entered by anyone,
+            // including the president who requested it.
+            const clubPending = m.club.status === "PENDING";
+            const enterable = !clubPending && m.status === "ACTIVE";
+
+            const subtitle = clubPending
+              ? "Awaiting review by a platform admin"
+              : m.status === "PENDING"
+                ? "Awaiting approval by a club exec"
+                : `/${m.club.slug}`;
+
             const card = (
               <Card
                 className={
-                  isActive ? "transition-colors hover:border-foreground/30" : ""
+                  enterable ? "transition-colors hover:border-foreground/30" : ""
                 }
               >
                 <CardContent className="flex items-center gap-4 py-4">
@@ -122,16 +143,12 @@ export default async function ClubsPage({
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{m.club.name}</p>
                     <p className="truncate text-sm text-muted-foreground">
-                      {isActive
-                        ? `/${m.club.slug}`
-                        : m.status === "PENDING"
-                          ? "Awaiting approval by a club exec"
-                          : `/${m.club.slug}`}
+                      {subtitle}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <Badge variant="secondary">{m.role}</Badge>
-                    <StatusBadge status={m.status} />
+                    <StatusBadge status={clubPending ? "PENDING" : m.status} />
                   </div>
                 </CardContent>
               </Card>
@@ -139,7 +156,7 @@ export default async function ClubsPage({
 
             return (
               <li key={m.id}>
-                {isActive ? (
+                {enterable ? (
                   <Link href={`/${m.club.slug}/dashboard`}>{card}</Link>
                 ) : (
                   card

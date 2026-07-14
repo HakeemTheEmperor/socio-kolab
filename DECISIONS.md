@@ -524,3 +524,57 @@ optional would have weakened the sign-up path's guarantees to serve the join pat
 - **Duplicate guard:** he then sees "awaiting approval" instead of a form, and
   submitting a valid join form captured from another user's session under his
   own cookie returns "You already have a membership in Beta Club."
+
+## Multi-club step 6 — Club requests (/clubs/new) and platform admin (/admin)
+
+### The president's membership is created with the club, not with the approval
+`requestClub` writes the club (PENDING) *and* an ACTIVE PRESIDENT membership for
+the requester in one create. The membership is harmless while it waits: a PENDING
+club 404s for everyone via `getClubBySlug`, its president included. Approval is
+then a single status flip rather than a second write (club + membership) that
+could half-fail and leave a live club with no president.
+
+### Slug availability is checked twice on purpose
+The live check (`checkSlug`, called from the form) is advisory. `requestClub`
+re-validates format and relies on the unique index to settle races — two people
+can be typing the same slug at the same time, and the DB is the only thing that
+can actually arbitrate. A slug is taken whatever the club's status: a rejected or
+suspended club still owns its URL.
+
+### Admins manage lifecycle, never club contents
+`src/app/admin/actions.ts` exposes exactly four transitions —
+PENDING→ACTIVE (with `approvedAt`), PENDING→REJECTED, ACTIVE→SUSPENDED,
+SUSPENDED→ACTIVE — through one `transition()` helper that refuses any other
+move. There is deliberately no admin action that touches a club's members, dues,
+events, or settings.
+
+Reactivating keeps the original `approvedAt`: it records when the club was first
+approved, not the last time an admin toggled it.
+
+### The admin guard 404s, and lives in the actions too
+`requirePlatformAdmin` (`lib/admin.ts`) calls `notFound()` for signed-out users
+and ordinary members alike — the app doesn't confirm that an admin area exists to
+people who can't use it. It reads `isPlatformAdmin` from the database on every
+call rather than trusting a claim in the JWT, so revoking admin takes effect at
+once. Every admin action calls it: the page guard protects the page, not the
+entry points, as verified by invoking `approveClub` directly as an ordinary member.
+
+### /clubs shows PENDING clubs, and never forwards into one
+The switcher now includes memberships whose club is PENDING, rendered as an
+"Awaiting review by a platform admin" card. Auto-forward requires an ACTIVE
+membership in an ACTIVE club and nothing else outstanding — otherwise a user with
+one live club plus a club request would be forwarded past the page and never see
+that their request exists. REJECTED and SUSPENDED clubs are omitted entirely: to
+their members they are as gone as they are to the router.
+
+### Verified against a running server
+Ordinary member and signed-out visitor both get 404 at `/admin`; the admin gets
+200. A member requests "Chess Society" → confirmation screen; while PENDING, its
+dashboard and its public register page 404 *even for its own president*, and it
+shows as an awaiting-review card on his `/clubs`. Reserved (`admin`, `login`),
+malformed (`Bad Slug`, `ab`, `double--hyphen`) and duplicate (`demo-club`) slugs
+are all refused. An ordinary member invoking `approveClub` directly is refused
+and the club stays pending. The admin approves → the requester immediately reaches
+`/chess-society/dashboard` and `/chess-society/settings` as PRESIDENT, and the
+club's register page opens to the public. Suspend → both 404 again, for the
+president too. Reactivate → live again.
