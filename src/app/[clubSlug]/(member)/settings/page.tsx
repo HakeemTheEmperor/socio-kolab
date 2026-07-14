@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { getClubSettings } from "@/lib/club";
+import { getClubSettings, getClubTheme } from "@/lib/club";
 import { requireClubAccess } from "@/lib/club-context";
 import { can } from "@/lib/permissions";
 import {
@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { SettingsForm } from "./settings-form";
+import { AppearanceForm } from "./appearance-form";
 
 export const metadata: Metadata = { title: "Settings — Club Portal" };
 
@@ -42,6 +43,19 @@ export default async function SettingsPage({
         </CardHeader>
         <CardContent>
           <SettingsForm name={club.name} settings={settings} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Appearance</CardTitle>
+          <CardDescription>
+            Pick three colors; everything else — hover states, borders, muted text —
+            is derived from them. Paid/unpaid colors never change.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AppearanceForm theme={getClubTheme(club.settings)} />
         </CardContent>
       </Card>
     </div>

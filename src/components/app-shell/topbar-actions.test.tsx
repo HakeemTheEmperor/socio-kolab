@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { TOPBAR_ACTIONS_ID, TopbarActions } from "./topbar-actions";
 
 declare global {
-  // eslint-disable-next-line no-var
   var IS_REACT_ACT_ENVIRONMENT: boolean;
 }
 

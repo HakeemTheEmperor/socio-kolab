@@ -837,3 +837,48 @@ Signed in over the real credentials endpoint:
 - Topbar renders `<h1>Dashboard</h1>`, the sidebar is 260px, the active nav item
   carries `bg-primary-tint text-primary-tint-fg`, and the old horizontally-scrolling
   header nav is gone.
+
+## UI refactor step 5 — Settings → Appearance
+
+### A separate action, not a bigger `settingsSchema`
+`updateTheme(clubSlug, colors | null)` sits alongside `updateSettings` rather than
+folding three colors into the settings form. They validate differently (colors go
+through `validateTheme`'s contrast rules, not just a shape check) and they
+revalidate differently — a theme change invalidates *every* page under the club,
+including the public register page, so it calls `revalidatePath(/{clubSlug},
+"layout")` where `updateSettings` names the four pages that read settings.
+
+### "Reset to default" deletes the key; it does not write today's default
+Passing `null` removes `settings.theme` entirely, so the club *follows* the platform
+default rather than freezing the current indigo into its row. If the platform
+default ever changes, clubs that never customized move with it — which is what
+"absent key = platform defaults" (§A6) means.
+
+### The preview is the real components, not a mock of them
+`Preview` sets the generated tokens as CSS variables on its own wrapper and renders
+ordinary token utilities (`bg-surface`, `bg-primary-tint`, the real `<Badge
+variant="success">`) inside it. Because the tokens cascade, the miniature is styled
+by exactly the same rules as the live pages — there is no preview-specific styling
+that could drift from the app it is previewing. It calls the same `generateTheme`
+the server calls.
+
+### Blocking errors and soft warnings are one list, distinguished by color
+`validateTheme` returns both in `warnings` (§A5 fixes the signature), so the form
+renders the list in danger ink when `ok` is false and warning ink when it is true,
+and only disables the save button in the former case. A half-typed hex shows "must
+be a hex color", not a contrast complaint — there is nothing to judge yet.
+
+### Verified against a running server, by calling the action directly
+The client disables its own save button, so the real test is a request that ignores
+it. Invoking `updateTheme` over the server-action endpoint:
+- yellow `#FDE047` primary on white → refused: *"Your primary color does not stand
+  out enough against the background (contrast 1.3:1, needs at least 3:1)"*
+  (acceptance checklist item 4);
+- a malformed hex (`"red"`) → refused by the schema;
+- `#0A0A0A / #DC2626 / #F97316` → saved, and `/demo-club/dashboard` **and the public
+  `/demo-club/register`** immediately serve `--bg:#0a0a0a` while `/login` stays
+  indigo;
+- the same call as an ordinary member → *"Not authorized."*, and the club's theme is
+  unchanged;
+- reset (`null`) → the club returns to indigo and `settings.theme` is `undefined` in
+  the database, not a copy of the default.
