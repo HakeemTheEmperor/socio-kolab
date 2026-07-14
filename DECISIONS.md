@@ -617,6 +617,50 @@ Verified: it refuses a missing `--club`, refuses an unknown slug, and imports in
 Beta Club *while Beta's applications are closed* — the toggle gates self-service
 applications, not roster management.
 
+## UI refactor step 1 — `lib/theme.ts`
+
+### The accent contrast rule contradicted the default accent, so the floor moved
+UI-REFACTOR §A5 blocks any accent scoring under **3.0:1** against the background,
+but §A1's own default accent (amber `#F59E0B`) scores **2.05:1** against its own
+default background (`#F8FAFC`). Taken literally, the platform default is a theme
+the settings form would refuse to save — a president could not type the defaults
+back in by hand.
+
+Resolved (user's call) by splitting the rule rather than changing the colors:
+- **Primary** keeps the hard `≥ 3.0` block. It carries links, icons and text drawn
+  directly on the background, which is exactly what WCAG 1.4.11 is about. The
+  spec's acceptance case (yellow `#FDE047` primary on white) is still blocked.
+- **Accent** blocks only below `1.8`, and *warns* between 1.8 and 3.0. An accent is
+  used as a filled chip or a tint, with text on top colored by `--accent-fg` (which
+  is contrast-picked), so it does not need to be perceivable against the raw
+  background the way primary does. The default amber therefore saves, with a
+  non-blocking "avoid relying on it for text or icons" note.
+
+### `validateTheme` puts blocking errors in `warnings` too
+The spec fixes the signature as `{ ok, warnings }` with no separate `errors` array,
+so blocking reasons are pushed into `warnings` and `ok: false` is what marks them
+blocking. Callers show the list either way; only `ok` gates the save.
+
+### Invalid colors degrade instead of throwing
+`generateTheme` falls back to the platform default for any color it cannot parse: a
+malformed hex hand-edited into a club's `settings` JSON should not 500 every page in
+that club. `validateTheme` is the boundary that *rejects* bad input — it is the one
+that runs on save.
+
+### Tokens are lowercase hex; semantic hues are constants
+Every token is normalized through `colord().toHex()` so `--primary-fg` (picked from
+two fixed constants) cannot come out in a different case than the derived tokens.
+Success/danger/warning/info base hues are frozen; only their tints are re-mixed
+against the club background, so "Unpaid" is red on white and on near-black alike.
+
+### Deps: `colord` + `vitest`
+`colord` (~2kb, the spec's preferred option) with its `a11y` (WCAG luminance and
+contrast) and `mix` plugins. The project had **no test runner** at all, so step 1's
+"with unit tests" requirement adds **vitest** as a dev dependency (`npm test`).
+26 tests cover: light background, dark background (red-on-black), the `--primary-fg`
+flip in both directions, semantic constancy, tint re-mixing, invalid input, and each
+validation branch.
+
 ### One environment note, not an app issue
 Killing the Next dev server mid-write on Windows can leave `.next` corrupt; the
 symptom is every route (including `/api/auth/*`) 404ing, or a Turbopack panic
