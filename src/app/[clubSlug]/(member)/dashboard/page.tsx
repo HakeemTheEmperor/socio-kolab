@@ -130,7 +130,7 @@ export default async function DashboardPage({
           <CardContent>
             {myDues ? (
               <div className="space-y-1">
-                <Badge className="border-transparent bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300">
+                <Badge variant="success">
                   Paid
                 </Badge>
                 <p className="text-sm text-muted-foreground">
@@ -140,7 +140,7 @@ export default async function DashboardPage({
               </div>
             ) : (
               <div className="space-y-1">
-                <Badge variant="outline">Unpaid</Badge>
+                <Badge variant="danger">Unpaid</Badge>
                 <p className="text-sm text-muted-foreground">
                   Dues of {formatCurrency(settings.duesAmount, settings.currency)}{" "}
                   are outstanding for this period.

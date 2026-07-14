@@ -152,10 +152,7 @@ export default async function EventDetailPage({
                       <li key={a.id} className="flex items-center gap-2">
                         <span>{a.membership.user.name}</span>
                         {a.checkedInAt ? (
-                          <Badge
-                            variant="outline"
-                            className="border-transparent bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300"
-                          >
+                          <Badge variant="success">
                             in
                           </Badge>
                         ) : null}

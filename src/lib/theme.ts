@@ -47,6 +47,9 @@ const MIN_ACCENT_CONTRAST = 1.8;
 /** Below this, primary and accent are too alike to distinguish. */
 const MIN_PRIMARY_ACCENT_CONTRAST = 1.5;
 
+/** Minimum contrast for text. Badge labels are 12px, so AA small text applies. */
+const MIN_TEXT_CONTRAST = 4.5;
+
 export type ThemeTokens = {
   "--bg": string;
   "--surface": string;
@@ -60,19 +63,25 @@ export type ThemeTokens = {
   "--primary-hover": string;
   "--primary-active": string;
   "--primary-tint": string;
+  "--primary-tint-fg": string;
   "--primary-fg": string;
   "--accent": string;
   "--accent-hover": string;
   "--accent-tint": string;
+  "--accent-tint-fg": string;
   "--accent-fg": string;
   "--success": string;
   "--success-tint": string;
+  "--success-tint-fg": string;
   "--danger": string;
   "--danger-tint": string;
+  "--danger-tint-fg": string;
   "--warning": string;
   "--warning-tint": string;
+  "--warning-tint-fg": string;
   "--info": string;
   "--info-tint": string;
+  "--info-tint-fg": string;
   "--ring": string;
 };
 
@@ -97,6 +106,22 @@ function foregroundOn(color: string): string {
  * Derives the full token scale from a club's three colors. Pure — safe to call on
  * the server (layout injection) and on the client (settings live preview).
  */
+/**
+ * A legible text color for `color` drawn on its own tint.
+ *
+ * The raw hue is not it: amber on an amber tint is 2.7:1, well under AA for the
+ * 12px text a badge is made of. Deepen it (or lighten it, on a dark theme) until
+ * it clears the bar — it stays recognisably the same hue, so "Unpaid" still reads
+ * as red, it just becomes readable.
+ */
+function inkOn(color: string, tint: string, dark: boolean): string {
+  let ink = colord(color);
+  for (let i = 0; i < 50 && ink.contrast(tint) < MIN_TEXT_CONTRAST; i++) {
+    ink = dark ? ink.lighten(0.02) : ink.darken(0.02);
+  }
+  return ink.toHex();
+}
+
 export function generateTheme(
   background: string,
   primary: string,
@@ -117,6 +142,16 @@ export function generateTheme(
   const shift = (c: ReturnType<typeof colord>, amount: number) =>
     dark ? c.lighten(amount) : c.darken(amount);
 
+  const primaryTint = brand.mix(bg, 0.9).toHex();
+  const accentTint = accentColor.mix(bg, 0.9).toHex();
+  const tintOf = (color: string) => colord(color).mix(bg, 0.88).toHex();
+  const semanticTints = {
+    success: tintOf(SEMANTIC.success),
+    danger: tintOf(SEMANTIC.danger),
+    warning: tintOf(SEMANTIC.warning),
+    info: tintOf(SEMANTIC.info),
+  };
+
   return {
     "--bg": bg.toHex(),
     "--surface": surface.toHex(),
@@ -130,22 +165,28 @@ export function generateTheme(
     "--primary": brand.toHex(),
     "--primary-hover": shift(brand, 0.08).toHex(),
     "--primary-active": shift(brand, 0.14).toHex(),
-    "--primary-tint": brand.mix(bg, 0.9).toHex(),
+    "--primary-tint": primaryTint,
+    "--primary-tint-fg": inkOn(brand.toHex(), primaryTint, dark),
     "--primary-fg": foregroundOn(brand.toHex()),
 
     "--accent": accentColor.toHex(),
     "--accent-hover": shift(accentColor, 0.08).toHex(),
-    "--accent-tint": accentColor.mix(bg, 0.9).toHex(),
+    "--accent-tint": accentTint,
+    "--accent-tint-fg": inkOn(accentColor.toHex(), accentTint, dark),
     "--accent-fg": foregroundOn(accentColor.toHex()),
 
     "--success": colord(SEMANTIC.success).toHex(),
-    "--success-tint": colord(SEMANTIC.success).mix(bg, 0.88).toHex(),
+    "--success-tint": semanticTints.success,
+    "--success-tint-fg": inkOn(SEMANTIC.success, semanticTints.success, dark),
     "--danger": colord(SEMANTIC.danger).toHex(),
-    "--danger-tint": colord(SEMANTIC.danger).mix(bg, 0.88).toHex(),
+    "--danger-tint": semanticTints.danger,
+    "--danger-tint-fg": inkOn(SEMANTIC.danger, semanticTints.danger, dark),
     "--warning": colord(SEMANTIC.warning).toHex(),
-    "--warning-tint": colord(SEMANTIC.warning).mix(bg, 0.88).toHex(),
+    "--warning-tint": semanticTints.warning,
+    "--warning-tint-fg": inkOn(SEMANTIC.warning, semanticTints.warning, dark),
     "--info": colord(SEMANTIC.info).toHex(),
-    "--info-tint": colord(SEMANTIC.info).mix(bg, 0.88).toHex(),
+    "--info-tint": semanticTints.info,
+    "--info-tint-fg": inkOn(SEMANTIC.info, semanticTints.info, dark),
 
     "--ring": brand.toHex(),
   };

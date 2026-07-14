@@ -100,7 +100,7 @@ export default async function ClubsPage({
       {notice ? (
         <p
           role="alert"
-          className="mb-6 rounded-md border border-amber-500/40 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+          className="mb-6 rounded-md border border-warning/40 bg-warning-tint px-3 py-2 text-sm text-warning-tint-fg"
         >
           {notice}
         </p>

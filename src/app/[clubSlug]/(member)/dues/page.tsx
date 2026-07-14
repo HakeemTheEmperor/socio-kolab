@@ -126,7 +126,7 @@ export default async function DuesPage({
                       {rec ? (
                         formatCurrency(rec.amount, settings.currency)
                       ) : (
-                        <Badge variant="outline">Unpaid</Badge>
+                        <Badge variant="danger">Unpaid</Badge>
                       )}
                     </TableCell>
                     <TableCell>{rec ? formatDate(rec.paidAt) : "—"}</TableCell>
@@ -161,11 +161,11 @@ export default async function DuesPage({
                 <div className="flex items-center justify-between">
                   <p className="font-medium">{m.user.name}</p>
                   {rec ? (
-                    <Badge className="border-transparent bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300">
+                    <Badge variant="success">
                       Paid
                     </Badge>
                   ) : (
-                    <Badge variant="outline">Unpaid</Badge>
+                    <Badge variant="danger">Unpaid</Badge>
                   )}
                 </div>
                 {rec ? (

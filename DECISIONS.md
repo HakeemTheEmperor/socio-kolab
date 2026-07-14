@@ -733,3 +733,51 @@ Killing the Next dev server mid-write on Windows can leave `.next` corrupt; the
 symptom is every route (including `/api/auth/*`) 404ing, or a Turbopack panic
 (`0xc0000142`). `rm -rf .next` and restart. Production builds were unaffected
 throughout.
+
+## UI refactor step 3 — Color sweep
+
+### The spec's badge colors fail WCAG, so the tints grew an ink token
+§C2 specifies badges as the semantic color drawn on its own tint
+(`--success-tint` / `--success`). Measured, that is **3.15:1** for success and
+**2.70:1** for warning on a light background — badge text is 12px, so AA wants
+4.5:1. Shipping it as written would mean unreadable "Pending" chips.
+
+`generateTheme` now derives a companion **`--{x}-tint-fg`** for each tint (primary,
+accent, and the four semantics): the same hue, deepened on a light theme or
+lightened on a dark one, stepwise until it clears 4.5:1 against its own tint. The
+hue barely moves — a deepened `#dc2626` is still red — so §A3's "Unpaid must read
+as red" holds, it just becomes legible. On the dark club theme the ink lightens
+instead (`--danger-tint-fg: #e35252`), and where the base hue already clears the
+bar it is left alone (`--success-tint-fg` on dark is just `--success`).
+
+A test asserts every tint/ink pair clears 4.5:1 under a light theme, a dark theme,
+and a club whose brand collides with the semantic hues (a red club).
+
+### One badge, five variants — not six copies of the same class string
+The same green "Paid"/"Checked in" class string was pasted in six files, and
+`StatusBadge` and the admin's `ClubStatusBadge` each carried their own palette map.
+`badge.tsx` gains `success` / `warning` / `danger` / `info` / `neutral` variants and
+every call site now names a meaning (`<Badge variant="success">`) instead of
+restating a color. The two status maps collapse to status → variant lookups.
+
+### "Unpaid" was a neutral outline badge; it is red now
+It rendered as `variant="outline"` — grey. The acceptance checklist requires Paid
+and Unpaid to read green/red under every club theme, so the three Unpaid badges
+(dashboard, dues table, member table) are now `variant="danger"`.
+
+### `dark:` variants are gone from app code; the vendored shadcn files keep theirs
+Every `dark:*` class in `src/app` and `src/components` (outside `ui/`) is deleted —
+they paired with the palette classes that just died, and nothing sets a `.dark`
+class any more (step 2). The shadcn primitives in `src/components/ui/` still carry
+a few (`dark:bg-destructive/20`); they are vendor files, reference only token
+variables, and are inert without the class. Rewriting them would only make the next
+`shadcn add` conflict.
+
+### Verified
+`grep` for every default-Tailwind palette utility (`gray|zinc|slate|red|amber|
+green|blue|indigo|…`-`[0-9]+`) across `src/**/*.tsx|ts|css` returns **nothing**
+outside the vendored primitives, which are themselves clean. The compiled CSS shows
+the badge utilities resolving to the token variables
+(`.bg-success-tint{background-color:var(--success-tint)}`), and a running server
+serves the deepened inks for a dark club. `next build`, `npm run lint` and 46 unit
+tests are green.

@@ -26,20 +26,17 @@ import { RequestDecision, SuspensionToggle } from "./club-actions";
 
 export const metadata: Metadata = { title: "Admin — Club Portal" };
 
-const STATUS_STYLES: Record<string, string> = {
-  ACTIVE:
-    "border-transparent bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
-  PENDING:
-    "border-transparent bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-  REJECTED:
-    "border-transparent bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
-  SUSPENDED:
-    "border-transparent bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-};
+/** Club lifecycle status → badge variant. */
+const STATUS_VARIANTS = {
+  ACTIVE: "success",
+  PENDING: "warning",
+  REJECTED: "danger",
+  SUSPENDED: "neutral",
+} as const;
 
 function ClubStatusBadge({ status }: { status: string }) {
   return (
-    <Badge variant="outline" className={STATUS_STYLES[status]}>
+    <Badge variant={STATUS_VARIANTS[status as keyof typeof STATUS_VARIANTS] ?? "neutral"}>
       {status.charAt(0) + status.slice(1).toLowerCase()}
     </Badge>
   );

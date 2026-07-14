@@ -93,7 +93,7 @@ export function CheckInList({
               </div>
               <div className="flex items-center gap-2">
                 {checked[m.membershipId] ? (
-                  <Badge className="border-transparent bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300">
+                  <Badge variant="success">
                     Checked in
                   </Badge>
                 ) : null}

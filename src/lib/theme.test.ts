@@ -161,6 +161,46 @@ describe("generateTheme — invalid input", () => {
   });
 });
 
+describe("generateTheme — text on tints is readable (badges)", () => {
+  const themes = {
+    light: generateTheme(
+      DEFAULT_THEME.background,
+      DEFAULT_THEME.primary,
+      DEFAULT_THEME.accent,
+    ),
+    dark: generateTheme(DARK.background, DARK.primary, DARK.accent),
+    // A club whose brand happens to collide with the semantic hues.
+    red: generateTheme("#FFF1F2", "#B91C1C", "#DC2626"),
+  };
+
+  for (const [name, t] of Object.entries(themes)) {
+    for (const kind of [
+      "primary",
+      "accent",
+      "success",
+      "danger",
+      "warning",
+      "info",
+    ] as const) {
+      it(`${name}: --${kind}-tint-fg clears AA on --${kind}-tint`, () => {
+        expect(
+          contrast(t[`--${kind}-tint-fg`], t[`--${kind}-tint`]),
+        ).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
+
+  it("keeps the ink the same hue as the semantic color it deepens", () => {
+    const t = themes.light;
+    // A deepened red is still red: hue barely moves, only lightness does.
+    expect(Math.abs(colord(t["--danger-tint-fg"]).hue() - colord(t["--danger"]).hue()))
+      .toBeLessThan(10);
+    expect(colord(t["--danger-tint-fg"]).luminance()).toBeLessThan(
+      colord(t["--danger"]).luminance(),
+    );
+  });
+});
+
 describe("globals.css fallback", () => {
   it("declares exactly the platform default tokens generateTheme produces", () => {
     const css = readFileSync("src/app/globals.css", "utf8");

@@ -111,8 +111,8 @@ export default async function ClubLayout({
         </div>
       </header>
       {membership.user.mustChangePassword ? (
-        <div className="border-b bg-amber-50 dark:bg-amber-950/40">
-          <div className="mx-auto w-full max-w-6xl px-4 py-2 text-sm text-amber-900 dark:text-amber-200">
+        <div className="border-b bg-warning-tint">
+          <div className="mx-auto w-full max-w-6xl px-4 py-2 text-sm text-warning-tint-fg">
             Please{" "}
             <Link href={`/${clubSlug}/profile`} className="font-medium underline">
               change your password
