@@ -25,10 +25,7 @@ export default async function ProfilePage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Profile</h1>
-        <p className="text-muted-foreground">{me.user.email}</p>
-      </div>
+      <p className="text-[13px] text-muted-foreground">{me.user.email}</p>
 
       <Card>
         <CardHeader>
@@ -46,7 +43,7 @@ export default async function ProfilePage({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="password" className="scroll-mt-20">
         <CardHeader>
           <CardTitle className="text-base">Change password</CardTitle>
         </CardHeader>

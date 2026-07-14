@@ -19,6 +19,14 @@ const badgeVariants = cva(
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
+        // Semantic badges (UI-REFACTOR §C2). Fixed hues: "Unpaid" reads red under
+        // every club theme. The tint and its ink are both derived against the
+        // club's background, so they stay legible on a dark club theme too.
+        success: "bg-success-tint text-success-tint-fg",
+        warning: "bg-warning-tint text-warning-tint-fg",
+        danger: "bg-danger-tint text-danger-tint-fg",
+        info: "bg-info-tint text-info-tint-fg",
+        neutral: "bg-muted text-muted-foreground",
       },
     },
     defaultVariants: {

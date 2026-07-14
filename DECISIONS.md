@@ -617,8 +617,268 @@ Verified: it refuses a missing `--club`, refuses an unknown slug, and imports in
 Beta Club *while Beta's applications are closed* — the toggle gates self-service
 applications, not roster management.
 
+## UI refactor step 1 — `lib/theme.ts`
+
+### The accent contrast rule contradicted the default accent, so the floor moved
+UI-REFACTOR §A5 blocks any accent scoring under **3.0:1** against the background,
+but §A1's own default accent (amber `#F59E0B`) scores **2.05:1** against its own
+default background (`#F8FAFC`). Taken literally, the platform default is a theme
+the settings form would refuse to save — a president could not type the defaults
+back in by hand.
+
+Resolved (user's call) by splitting the rule rather than changing the colors:
+- **Primary** keeps the hard `≥ 3.0` block. It carries links, icons and text drawn
+  directly on the background, which is exactly what WCAG 1.4.11 is about. The
+  spec's acceptance case (yellow `#FDE047` primary on white) is still blocked.
+- **Accent** blocks only below `1.8`, and *warns* between 1.8 and 3.0. An accent is
+  used as a filled chip or a tint, with text on top colored by `--accent-fg` (which
+  is contrast-picked), so it does not need to be perceivable against the raw
+  background the way primary does. The default amber therefore saves, with a
+  non-blocking "avoid relying on it for text or icons" note.
+
+### `validateTheme` puts blocking errors in `warnings` too
+The spec fixes the signature as `{ ok, warnings }` with no separate `errors` array,
+so blocking reasons are pushed into `warnings` and `ok: false` is what marks them
+blocking. Callers show the list either way; only `ok` gates the save.
+
+### Invalid colors degrade instead of throwing
+`generateTheme` falls back to the platform default for any color it cannot parse: a
+malformed hex hand-edited into a club's `settings` JSON should not 500 every page in
+that club. `validateTheme` is the boundary that *rejects* bad input — it is the one
+that runs on save.
+
+### Tokens are lowercase hex; semantic hues are constants
+Every token is normalized through `colord().toHex()` so `--primary-fg` (picked from
+two fixed constants) cannot come out in a different case than the derived tokens.
+Success/danger/warning/info base hues are frozen; only their tints are re-mixed
+against the club background, so "Unpaid" is red on white and on near-black alike.
+
+### Deps: `colord` + `vitest` (step 1)
+`colord` (~2kb, the spec's preferred option) with its `a11y` (WCAG luminance and
+contrast) and `mix` plugins. The project had **no test runner** at all, so step 1's
+"with unit tests" requirement adds **vitest** as a dev dependency (`npm test`).
+26 tests cover: light background, dark background (red-on-black), the `--primary-fg`
+flip in both directions, semantic constancy, tint re-mixing, invalid input, and each
+validation branch.
+
+## UI refactor step 2 — Token injection and shadcn wiring
+
+### Tailwind v4 has no config file, so the tokens live in `@theme`
+§A4 says "extend the Tailwind config with `colors: {…}`". There is no
+`tailwind.config.js` in this project — Tailwind v4 declares its scale in CSS. The
+equivalent is an `@theme inline` block in `globals.css` mapping `--color-*` to the
+generated tokens, which produces exactly the utilities the spec asks for
+(`bg-primary`, `bg-surface`, `border-border`).
+
+### shadcn's names keep their meaning; the club's accent becomes `brand-*`
+The token names in §A2 collide with shadcn's, and two of the collisions are traps:
+shadcn's `--accent` is its *hover/active surface* (used by 26 components) and its
+`--muted` is a *surface*, not muted text. Re-pointing `bg-accent` at the club's
+amber would have turned every dropdown hover amber.
+
+So the mapping preserves shadcn's semantics and the club's accent is exposed under
+a different **utility** prefix (the CSS variable is still `--accent`, per spec):
+
+| shadcn variable | token | | club accent |
+|---|---|---|---|
+| `--background` | `--bg` | | `bg-brand` |
+| `--card`, `--popover` | `--surface` | | `bg-brand-tint` |
+| `--muted`, `--secondary`, `--accent` | `--surface-hover` | | `text-brand-fg` |
+| `--muted-foreground` | `--text-muted` | | |
+| `--destructive` | `--danger` | | |
+| `--ring` | `--primary` (C3's focus-ring rule, for free) | | |
+
+The payoff: the 93 existing `text-muted-foreground` and 33 `bg-muted` usages became
+token-driven with no edit at all, which is most of the step-3 sweep already done.
+`bg-accent` in a component still means "hover surface" and is correct as written.
+
+### There is no `.dark` class any more
+Dark mode used to be a `.dark` variant block (shadcn's default, driven by
+`next-themes`). It is deleted: light vs. dark is now a *property of the club's
+background luminance*, computed inside `generateTheme`, so the same tokens serve
+both and a `dark:` variant would fight the theme rather than serve it. The
+`@custom-variant dark` declaration stays only so the handful of leftover `dark:`
+classes still compile until the step-3 sweep removes them; nothing sets the class.
+
+### Injection: root layout defaults, `[clubSlug]` layout overrides
+Rather than adding a `generateTheme` call to each of `/login`, `/clubs`,
+`/clubs/new` and `/admin` (§A4), the **root** layout injects the platform default
+once, and the new `app/[clubSlug]/layout.tsx` injects the club's tokens. Layouts
+nest, so the club block lands after the default in document order and wins the
+cascade at equal specificity. The guarantee the spec wants holds by construction:
+a club's `<style>` only ever exists inside `/{clubSlug}/`, so it cannot leak onto a
+platform page — and any *future* non-club route is themed correctly by default
+rather than by remembering to add a call.
+
+`app/[clubSlug]/layout.tsx` is new (only `(member)/layout.tsx` existed). It sits
+*above* `(member)`, which is what themes the public `/{clubSlug}/register` page.
+`getClubBySlug` is `cache()`d, so it adds no query.
+
+### `globals.css` carries a static copy of the default tokens
+The `:root` block duplicates `generateTheme`'s default output as a fallback for
+anything that renders outside a layout. To stop the copy drifting, a unit test
+parses `globals.css` and asserts every token equals the function's output.
+
+### Verified against a running server
+With Demo Club's theme set to `#0A0A0A / #DC2626 / #F97316` in its settings JSON:
+`/demo-club/register` (a *public*, club-scoped page) serves `--bg:#0a0a0a`,
+`--text:#f8fafc`, `--primary:#dc2626` — and the platform default block still
+precedes it, so the cascade order is right. `--danger` stays `#dc2626` while
+`--danger-tint` re-mixes to `#24140f` for the dark background. `/login` serves the
+indigo default regardless. Removing the `theme` key returns the club to the default
+immediately.
+
 ### One environment note, not an app issue
 Killing the Next dev server mid-write on Windows can leave `.next` corrupt; the
 symptom is every route (including `/api/auth/*`) 404ing, or a Turbopack panic
 (`0xc0000142`). `rm -rf .next` and restart. Production builds were unaffected
 throughout.
+
+## UI refactor step 3 — Color sweep
+
+### The spec's badge colors fail WCAG, so the tints grew an ink token
+§C2 specifies badges as the semantic color drawn on its own tint
+(`--success-tint` / `--success`). Measured, that is **3.15:1** for success and
+**2.70:1** for warning on a light background — badge text is 12px, so AA wants
+4.5:1. Shipping it as written would mean unreadable "Pending" chips.
+
+`generateTheme` now derives a companion **`--{x}-tint-fg`** for each tint (primary,
+accent, and the four semantics): the same hue, deepened on a light theme or
+lightened on a dark one, stepwise until it clears 4.5:1 against its own tint. The
+hue barely moves — a deepened `#dc2626` is still red — so §A3's "Unpaid must read
+as red" holds, it just becomes legible. On the dark club theme the ink lightens
+instead (`--danger-tint-fg: #e35252`), and where the base hue already clears the
+bar it is left alone (`--success-tint-fg` on dark is just `--success`).
+
+A test asserts every tint/ink pair clears 4.5:1 under a light theme, a dark theme,
+and a club whose brand collides with the semantic hues (a red club).
+
+### One badge, five variants — not six copies of the same class string
+The same green "Paid"/"Checked in" class string was pasted in six files, and
+`StatusBadge` and the admin's `ClubStatusBadge` each carried their own palette map.
+`badge.tsx` gains `success` / `warning` / `danger` / `info` / `neutral` variants and
+every call site now names a meaning (`<Badge variant="success">`) instead of
+restating a color. The two status maps collapse to status → variant lookups.
+
+### "Unpaid" was a neutral outline badge; it is red now
+It rendered as `variant="outline"` — grey. The acceptance checklist requires Paid
+and Unpaid to read green/red under every club theme, so the three Unpaid badges
+(dashboard, dues table, member table) are now `variant="danger"`.
+
+### `dark:` variants are gone from app code; the vendored shadcn files keep theirs
+Every `dark:*` class in `src/app` and `src/components` (outside `ui/`) is deleted —
+they paired with the palette classes that just died, and nothing sets a `.dark`
+class any more (step 2). The shadcn primitives in `src/components/ui/` still carry
+a few (`dark:bg-destructive/20`); they are vendor files, reference only token
+variables, and are inert without the class. Rewriting them would only make the next
+`shadcn add` conflict.
+
+### Verified
+`grep` for every default-Tailwind palette utility (`gray|zinc|slate|red|amber|
+green|blue|indigo|…`-`[0-9]+`) across `src/**/*.tsx|ts|css` returns **nothing**
+outside the vendored primitives, which are themselves clean. The compiled CSS shows
+the badge utilities resolving to the token variables
+(`.bg-success-tint{background-color:var(--success-tint)}`), and a running server
+serves the deepened inks for a dark club. `next build`, `npm run lint` and 46 unit
+tests are green.
+
+## UI refactor step 4 — App shell (sidebar, topbar, slide-over)
+
+### The page's action lives in the topbar, so the page portals it there
+§B4 puts each page's contextual primary action in the topbar, but the topbar is in
+the layout and the action needs the *page's* data — the dues period list and the
+CSV rows are fetched by `dues/page.tsx`. Hoisting the controls into the layout
+would mean the layout re-fetching each page's data just to render a button.
+
+So the topbar renders an empty `#topbar-actions` div and pages portal into it
+(`components/app-shell/topbar-actions.tsx`). Pages stay server components; only
+the action itself is client-side. The cost: the action mounts on hydration rather
+than appearing in the server HTML — fine for a button nobody can click before
+hydration, but it is the one part of the shell that HTML inspection cannot verify,
+so it has a **jsdom test** asserting the children land in the slot and nowhere
+else. Without it, a silent regression would cost an exec the "Create event" button.
+
+`useSyncExternalStore` marks the client-only render, not `useState` in an effect —
+the React Compiler's lint rules reject the latter, correctly.
+
+### Titles: the topbar owns the h1
+Every page's `<h1>` moved to the topbar, derived from the route (`nav.ts`
+`pageTitle`). The supporting line each page had under its heading (member count,
+"x of y paid", the user's email) stays in the body, demoted to 13px muted text per
+§C1. Detail pages (`members/[id]`, `events/[id]`) keep their own `<h1>` — it is the
+member's or event's *name*, which the topbar's section title ("Members") does not
+duplicate.
+
+### No "Add member" action, because there is no such feature
+§B4 lists Members → "Add member" for execs. The app has no manual add-member flow —
+members arrive by self-service registration or the CSV importer — and this refactor
+is explicitly not allowed to add business logic. The Members topbar therefore has no
+action. Events ("Create event") and Dues (period selector + "Export CSV") do.
+
+### Profile left the nav for the user menu
+§B2's nav is Dashboard / Members / Dues / Events / Settings; Profile is an item in
+the bottom user dropdown, next to "Change password" (which links to the same page's
+password card, now anchored `#password`) and "Sign out". The sign-out server action
+is passed from the layout into the client sidebar as a prop.
+
+### Badge counts are exec-only, and cost nothing for everyone else
+The Members nav badge counts PENDING applications. Only execs can act on them
+(`can(membership, "member:approve")`), so the layout only runs the count query for
+execs — a member's dashboard does not pay for a number they will never see.
+
+### Verified against a running server
+Signed in over the real credentials endpoint:
+- **President** (single club): all five nav items including Settings; the club block
+  is a plain link to `/clubs` (a dropdown with nothing to switch to would be a menu
+  that says nothing); pending badge shows 2.
+- **Exec**: no Settings item; badge shows 2.
+- **Member with two clubs** (`ada.obi@club.test`): no Dues, no Settings; the club
+  block is a dropdown listing Beta Club and "All clubs"; no pending badge.
+- Topbar renders `<h1>Dashboard</h1>`, the sidebar is 260px, the active nav item
+  carries `bg-primary-tint text-primary-tint-fg`, and the old horizontally-scrolling
+  header nav is gone.
+
+## UI refactor step 5 — Settings → Appearance
+
+### A separate action, not a bigger `settingsSchema`
+`updateTheme(clubSlug, colors | null)` sits alongside `updateSettings` rather than
+folding three colors into the settings form. They validate differently (colors go
+through `validateTheme`'s contrast rules, not just a shape check) and they
+revalidate differently — a theme change invalidates *every* page under the club,
+including the public register page, so it calls `revalidatePath(/{clubSlug},
+"layout")` where `updateSettings` names the four pages that read settings.
+
+### "Reset to default" deletes the key; it does not write today's default
+Passing `null` removes `settings.theme` entirely, so the club *follows* the platform
+default rather than freezing the current indigo into its row. If the platform
+default ever changes, clubs that never customized move with it — which is what
+"absent key = platform defaults" (§A6) means.
+
+### The preview is the real components, not a mock of them
+`Preview` sets the generated tokens as CSS variables on its own wrapper and renders
+ordinary token utilities (`bg-surface`, `bg-primary-tint`, the real `<Badge
+variant="success">`) inside it. Because the tokens cascade, the miniature is styled
+by exactly the same rules as the live pages — there is no preview-specific styling
+that could drift from the app it is previewing. It calls the same `generateTheme`
+the server calls.
+
+### Blocking errors and soft warnings are one list, distinguished by color
+`validateTheme` returns both in `warnings` (§A5 fixes the signature), so the form
+renders the list in danger ink when `ok` is false and warning ink when it is true,
+and only disables the save button in the former case. A half-typed hex shows "must
+be a hex color", not a contrast complaint — there is nothing to judge yet.
+
+### Verified against a running server, by calling the action directly
+The client disables its own save button, so the real test is a request that ignores
+it. Invoking `updateTheme` over the server-action endpoint:
+- yellow `#FDE047` primary on white → refused: *"Your primary color does not stand
+  out enough against the background (contrast 1.3:1, needs at least 3:1)"*
+  (acceptance checklist item 4);
+- a malformed hex (`"red"`) → refused by the schema;
+- `#0A0A0A / #DC2626 / #F97316` → saved, and `/demo-club/dashboard` **and the public
+  `/demo-club/register`** immediately serve `--bg:#0a0a0a` while `/login` stays
+  indigo;
+- the same call as an ordinary member → *"Not authorized."*, and the club's theme is
+  unchanged;
+- reset (`null`) → the club returns to indigo and `settings.theme` is `undefined` in
+  the database, not a copy of the default.

@@ -6,7 +6,11 @@ import { getClubSettings } from "@/lib/club";
 import { requireClubAccess } from "@/lib/club-context";
 import { can } from "@/lib/permissions";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { CheckCircle2, Clock, Users, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { StatCard } from "@/components/stat-card";
+import { EmptyState } from "@/components/empty-state";
+import { Avatar } from "@/components/date-block";
 import {
   Table,
   TableBody,
@@ -18,6 +22,7 @@ import {
 import { PeriodSelector } from "./period-selector";
 import { RecordPaymentDialog } from "./record-payment-dialog";
 import { ExportCsvButton, type DuesCsvRow } from "./export-csv-button";
+import { TopbarActions } from "@/components/app-shell/topbar-actions";
 
 export const metadata: Metadata = { title: "Dues — Club Portal" };
 
@@ -73,6 +78,9 @@ export default async function DuesPage({
     (sum, r) => sum + (r.rec ? Number(r.rec.amount) : 0),
     0,
   );
+  const pctPaid = activeMembers.length
+    ? Math.round((paidCount / activeMembers.length) * 100)
+    : 0;
 
   const csvRows: DuesCsvRow[] = rows.map(({ m, rec }) => ({
     name: m.user.name,
@@ -86,28 +94,59 @@ export default async function DuesPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Dues</h1>
-          <p className="text-muted-foreground">
-            {paidCount} of {activeMembers.length} active members paid ·{" "}
-            {formatCurrency(collected, settings.currency)} collected
-          </p>
+      <TopbarActions>
+        <PeriodSelector periods={periods} selected={selected} />
+        <ExportCsvButton rows={csvRows} period={selected} />
+      </TopbarActions>
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+        <StatCard
+          label="Paid"
+          value={`${paidCount}/${activeMembers.length}`}
+          icon={CheckCircle2}
+        />
+        <StatCard
+          label="Unpaid"
+          value={String(activeMembers.length - paidCount)}
+          icon={Clock}
+          tone={activeMembers.length - paidCount > 0 ? "warning" : "default"}
+        />
+        <StatCard
+          label="Collected"
+          value={formatCurrency(collected, settings.currency)}
+          icon={Wallet}
+        />
+      </div>
+
+      {/* How far this period has got, at a glance (§C2). */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-[13px]">
+          <span className="text-muted-foreground">Collection progress</span>
+          <span className="font-medium">{pctPaid}%</span>
         </div>
-        <div className="flex items-center gap-3">
-          <PeriodSelector periods={periods} selected={selected} />
-          <ExportCsvButton rows={csvRows} period={selected} />
+        <div
+          role="progressbar"
+          aria-valuenow={pctPaid}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Dues collected"
+          className="h-2 overflow-hidden rounded-full bg-border"
+        >
+          <div className="h-full rounded-full bg-primary" style={{ width: `${pctPaid}%` }} />
         </div>
       </div>
 
       {activeMembers.length === 0 ? (
-        <div className="rounded-md border border-dashed p-10 text-center text-muted-foreground">
-          No active members yet.
+        <div className="rounded-xl border border-border bg-surface">
+          <EmptyState
+            icon={Users}
+            message="No active members yet — dues appear here once members are approved."
+          />
         </div>
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden overflow-x-auto rounded-md border md:block">
+          <div className="hidden overflow-x-auto rounded-xl border border-border bg-surface md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -120,13 +159,25 @@ export default async function DuesPage({
               </TableHeader>
               <TableBody>
                 {rows.map(({ m, rec }) => (
-                  <TableRow key={m.id}>
-                    <TableCell className="font-medium">{m.user.name}</TableCell>
+                  <TableRow key={m.id} className="hover:bg-surface-hover">
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar name={m.user.name} />
+                        <span className="font-medium">{m.user.name}</span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       {rec ? (
-                        formatCurrency(rec.amount, settings.currency)
+                        <span className="inline-flex items-center gap-1.5">
+                          <CheckCircle2
+                            aria-hidden
+                            strokeWidth={1.75}
+                            className="size-4 text-success"
+                          />
+                          {formatCurrency(rec.amount, settings.currency)}
+                        </span>
                       ) : (
-                        <Badge variant="outline">Unpaid</Badge>
+                        <Badge variant="danger">Unpaid</Badge>
                       )}
                     </TableCell>
                     <TableCell>{rec ? formatDate(rec.paidAt) : "—"}</TableCell>
@@ -157,19 +208,20 @@ export default async function DuesPage({
           {/* Mobile cards */}
           <div className="space-y-3 md:hidden">
             {rows.map(({ m, rec }) => (
-              <div key={m.id} className="rounded-md border p-4">
-                <div className="flex items-center justify-between">
-                  <p className="font-medium">{m.user.name}</p>
+              <div key={m.id} className="rounded-xl border border-border bg-surface p-4">
+                <div className="flex items-center gap-3">
+                  <Avatar name={m.user.name} />
+                  <p className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {m.user.name}
+                  </p>
                   {rec ? (
-                    <Badge className="border-transparent bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300">
-                      Paid
-                    </Badge>
+                    <Badge variant="success">Paid</Badge>
                   ) : (
-                    <Badge variant="outline">Unpaid</Badge>
+                    <Badge variant="danger">Unpaid</Badge>
                   )}
                 </div>
                 {rec ? (
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <p className="mt-2 text-[13px] text-muted-foreground">
                     {formatCurrency(rec.amount, settings.currency)} ·{" "}
                     {formatDate(rec.paidAt)}
                     {rec.method ? ` · ${rec.method}` : ""}

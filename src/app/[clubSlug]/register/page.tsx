@@ -12,31 +12,33 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getClubSettings } from "@/lib/club";
+import { ClubMark } from "@/components/club-mark";
 import { getClubBySlug } from "@/lib/club-context";
 import { RegisterForm } from "./register-form";
 import { JoinClubForm } from "./join-club-form";
 
 export const metadata: Metadata = { title: "Register — Club Portal" };
 
+/**
+ * A club's front door, in the club's own theme (the `[clubSlug]` layout injects
+ * it): its mark and name above a centered card (§C2).
+ */
 function Shell({
-  logoUrl,
+  club,
   children,
 }: {
-  logoUrl: string | null;
+  club: { name: string; logoUrl: string | null };
   children: React.ReactNode;
 }) {
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        {logoUrl ? (
-          <div className="flex justify-center pt-6">
-            {/* Arbitrary external URL — next/image would need the host allow-listed. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={logoUrl} alt="" className="size-14 rounded-md object-cover" />
-          </div>
-        ) : null}
-        {children}
-      </Card>
+    <main className="flex min-h-screen items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md space-y-6">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <ClubMark club={club} className="size-14 rounded-xl text-xl" />
+          <p className="text-[15px] font-medium">{club.name}</p>
+        </div>
+        <Card>{children}</Card>
+      </div>
     </main>
   );
 }
@@ -54,9 +56,9 @@ export default async function RegisterPage({
   // submissions independently, so this is presentation, not enforcement.
   if (!settings.membershipOpen) {
     return (
-      <Shell logoUrl={club.logoUrl}>
+      <Shell club={club}>
         <CardHeader>
-          <CardTitle className="text-2xl">{club.name}</CardTitle>
+          <CardTitle className="text-2xl">Applications closed</CardTitle>
           <CardDescription>Applications are currently closed.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -78,7 +80,7 @@ export default async function RegisterPage({
   // Signed out: create an account and apply in one step.
   if (!session?.user?.id) {
     return (
-      <Shell logoUrl={club.logoUrl}>
+      <Shell club={club}>
         <CardHeader>
           <CardTitle className="text-2xl">Join {club.name}</CardTitle>
           <CardDescription>
@@ -106,9 +108,9 @@ export default async function RegisterPage({
           : `Your membership in ${club.name} is ${existing.status.toLowerCase()}. Contact a club exec if you think this is a mistake.`;
 
     return (
-      <Shell logoUrl={club.logoUrl}>
+      <Shell club={club}>
         <CardHeader>
-          <CardTitle className="text-2xl">{club.name}</CardTitle>
+          <CardTitle className="text-2xl">Your membership</CardTitle>
           <CardDescription>{message}</CardDescription>
         </CardHeader>
         <CardContent>
@@ -133,7 +135,7 @@ export default async function RegisterPage({
   // Signed in, not a member yet: one account, a second membership. No account
   // fields — name and password already exist on the User.
   return (
-    <Shell logoUrl={club.logoUrl}>
+    <Shell club={club}>
       <CardHeader>
         <CardTitle className="text-2xl">Join {club.name}</CardTitle>
         <CardDescription>

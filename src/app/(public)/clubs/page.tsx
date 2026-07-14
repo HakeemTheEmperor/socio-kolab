@@ -4,9 +4,13 @@ import { redirect } from "next/navigation";
 
 import { auth, signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { LayoutGrid } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/status-badge";
+import { EmptyState } from "@/components/empty-state";
+import { ClubMark } from "@/components/club-mark";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "Your clubs — Club Portal" };
@@ -19,29 +23,6 @@ const NOTICES: Record<string, string> = {
 };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
-
-function ClubAvatar({ name, logoUrl }: { name: string; logoUrl: string | null }) {
-  if (logoUrl) {
-    return (
-      // Club logos are arbitrary external URLs, so next/image's loader (which
-      // needs configured remote hosts) doesn't fit.
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={logoUrl}
-        alt=""
-        className="size-10 shrink-0 rounded-md object-cover"
-      />
-    );
-  }
-  return (
-    <div
-      aria-hidden
-      className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted font-semibold text-muted-foreground"
-    >
-      {name.charAt(0).toUpperCase()}
-    </div>
-  );
-}
 
 export default async function ClubsPage({
   searchParams,
@@ -100,26 +81,24 @@ export default async function ClubsPage({
       {notice ? (
         <p
           role="alert"
-          className="mb-6 rounded-md border border-amber-500/40 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+          className="mb-6 rounded-md border border-warning/40 bg-warning-tint px-3 py-2 text-sm text-warning-tint-fg"
         >
           {notice}
         </p>
       ) : null}
 
       {memberships.length === 0 ? (
-        <div className="rounded-md border border-dashed p-10 text-center">
-          <p className="font-medium">You don&apos;t belong to any clubs yet.</p>
-          <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
-            To join an existing club, use that club&apos;s registration link —
-            each club has its own. Or start your own club and invite members to
-            it.
-          </p>
-          <Button className="mt-6" render={<Link href="/clubs/new" />}>
-            Start a new club
-          </Button>
+        <div className="rounded-xl border border-border bg-surface">
+          <EmptyState
+            icon={LayoutGrid}
+            message="You don't belong to any clubs yet. To join one, use that club's own registration link — or start your own."
+            action={
+              <Button render={<Link href="/clubs/new" />}>Start a new club</Button>
+            }
+          />
         </div>
       ) : (
-        <ul className="space-y-3">
+        <ul className="grid gap-3 sm:grid-cols-2">
           {memberships.map((m) => {
             // A club still awaiting a platform admin can't be entered by anyone,
             // including the president who requested it.
@@ -135,20 +114,26 @@ export default async function ClubsPage({
             const card = (
               <Card
                 className={
-                  enterable ? "transition-colors hover:border-foreground/30" : ""
+                  enterable
+                    ? "h-full transition-colors hover:border-border-strong"
+                    : "h-full opacity-70"
                 }
               >
-                <CardContent className="flex items-center gap-4 py-4">
-                  <ClubAvatar name={m.club.name} logoUrl={m.club.logoUrl} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{m.club.name}</p>
-                    <p className="truncate text-sm text-muted-foreground">
-                      {subtitle}
+                <CardContent className="flex h-full flex-col gap-3 p-6">
+                  <div className="flex items-center gap-3">
+                    <ClubMark club={m.club} className="size-10" />
+                    <p className="min-w-0 flex-1 truncate text-[15px] font-medium">
+                      {m.club.name}
                     </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <p className="truncate text-[13px] text-muted-foreground">
+                    {subtitle}
+                  </p>
+                  <div className="mt-auto flex items-center gap-2">
                     <Badge variant="secondary">{m.role}</Badge>
-                    <StatusBadge status={clubPending ? "PENDING" : m.status} />
+                    {enterable ? null : (
+                      <StatusBadge status={clubPending ? "PENDING" : m.status} />
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -157,7 +142,9 @@ export default async function ClubsPage({
             return (
               <li key={m.id}>
                 {enterable ? (
-                  <Link href={`/${m.club.slug}/dashboard`}>{card}</Link>
+                  <Link href={`/${m.club.slug}/dashboard`} className="block h-full">
+                    {card}
+                  </Link>
                 ) : (
                   card
                 )}

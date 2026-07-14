@@ -5,10 +5,13 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireClubAccess } from "@/lib/club-context";
 import { formatDateTime } from "@/lib/format";
-import { Badge } from "@/components/ui/badge";
+import { CalendarDays, Clock, MapPin, Users } from "lucide-react";
+import { DateBlock } from "@/components/date-block";
+import { EmptyState } from "@/components/empty-state";
 import { ListSkeleton } from "@/components/page-skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EventFormDialog } from "./event-form-dialog";
+import { TopbarActions } from "@/components/app-shell/topbar-actions";
 import { RsvpButtons } from "./rsvp-buttons";
 
 export const metadata: Metadata = { title: "Events — Club Portal" };
@@ -32,24 +35,36 @@ function EventCard({
   upcoming: boolean;
 }) {
   return (
-    <div className="rounded-md border p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+    <div className="rounded-xl border border-border bg-surface p-6">
+      <div className="flex items-start gap-4">
+        <DateBlock date={event.startsAt} />
+        <div className="min-w-0 flex-1">
           <Link
             href={`/${clubSlug}/events/${event.id}`}
-            className="font-medium hover:underline"
+            className="text-[15px] font-medium hover:underline"
           >
             {event.title}
           </Link>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {formatDateTime(event.startsAt)}
-            {event.location ? ` · ${event.location}` : ""}
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <Clock aria-hidden strokeWidth={1.75} className="size-4" />
+              {formatDateTime(event.startsAt)}
+            </span>
+            {event.location ? (
+              <span className="inline-flex items-center gap-1.5">
+                <MapPin aria-hidden strokeWidth={1.75} className="size-4" />
+                {event.location}
+              </span>
+            ) : null}
+            <span className="inline-flex items-center gap-1.5">
+              <Users aria-hidden strokeWidth={1.75} className="size-4" />
+              {event.goingCount} going
+            </span>
+          </div>
         </div>
-        <Badge variant="secondary">{event.goingCount} going</Badge>
       </div>
       {upcoming ? (
-        <div className="mt-3">
+        <div className="mt-4">
           <RsvpButtons eventId={event.id} current={event.myRsvp} />
         </div>
       ) : null}
@@ -104,10 +119,11 @@ async function EventsList({ clubSlug }: { clubSlug: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Events</h1>
-        {isExec ? <EventFormDialog /> : null}
-      </div>
+      {isExec ? (
+        <TopbarActions>
+          <EventFormDialog />
+        </TopbarActions>
+      ) : null}
 
       <Tabs defaultValue="upcoming">
         <TabsList>
@@ -117,8 +133,13 @@ async function EventsList({ clubSlug }: { clubSlug: string }) {
 
         <TabsContent value="upcoming" className="space-y-3">
           {upcoming.length === 0 ? (
-            <div className="rounded-md border border-dashed p-10 text-center text-muted-foreground">
-              No upcoming events.
+            <div className="rounded-xl border border-border bg-surface">
+              <EmptyState
+                icon={CalendarDays}
+                message="No upcoming events."
+                // Only offer the action to someone who can take it (§C2).
+                action={isExec ? <EventFormDialog /> : undefined}
+              />
             </div>
           ) : (
             upcoming.map((e) => (
@@ -129,8 +150,8 @@ async function EventsList({ clubSlug }: { clubSlug: string }) {
 
         <TabsContent value="past" className="space-y-3">
           {past.length === 0 ? (
-            <div className="rounded-md border border-dashed p-10 text-center text-muted-foreground">
-              No past events.
+            <div className="rounded-xl border border-border bg-surface">
+              <EmptyState icon={CalendarDays} message="No past events yet." />
             </div>
           ) : (
             past.map((e) => (

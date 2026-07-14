@@ -3,6 +3,47 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+/**
+ * Where the Prisma CLI (migrate, seed, studio) connects.
+ *
+ * Local Postgres is one database on one URL, so `IS_SUPABASE` is unset and
+ * everything — app and CLI alike — uses `DATABASE_URL`.
+ *
+ * Supabase splits in two, because the app and the CLI want opposite things:
+ *
+ * - The app (`src/lib/prisma.ts`) keeps using `DATABASE_URL`, which there is a
+ *   *pooled* connection string. Serverless runtimes open a connection per cold
+ *   start, and a pooler is what survives that churn.
+ * - Migrations take advisory locks and run DDL, which need a real session. Run
+ *   them through Supabase's transaction pooler (port 6543) and they hang or
+ *   fail, so the CLI gets `DIRECT_URL`: the direct connection, or the session
+ *   pooler.
+ */
+function cliDatabaseUrl(): string | undefined {
+  if (process.env["IS_SUPABASE"] !== "true") {
+    return process.env["DATABASE_URL"];
+  }
+
+  const directUrl = process.env["DIRECT_URL"];
+  if (!directUrl) {
+    throw new Error(
+      "IS_SUPABASE=true, so the Prisma CLI needs DIRECT_URL (Supabase → " +
+        "Connect → Direct connection, or the session pooler). Migrations " +
+        "cannot run through the transaction pooler.",
+    );
+  }
+  // The mistake this catches is a slow one to diagnose: migrations pointed at
+  // the transaction pooler don't fail cleanly, they hang on the advisory lock.
+  if (directUrl.includes(":6543")) {
+    throw new Error(
+      "DIRECT_URL points at port 6543 (Supabase's transaction pooler), which " +
+        "cannot run migrations. Use the direct connection or the session " +
+        "pooler (port 5432).",
+    );
+  }
+  return directUrl;
+}
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
@@ -10,6 +51,6 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: cliDatabaseUrl(),
   },
 });

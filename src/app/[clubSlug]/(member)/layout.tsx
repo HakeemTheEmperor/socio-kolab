@@ -1,24 +1,8 @@
-import Link from "next/link";
-import { ChevronsUpDown } from "lucide-react";
-
 import { signOut } from "@/auth";
+import { prisma } from "@/lib/prisma";
 import { requireClubAccess } from "@/lib/club-context";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-
-function SignOutButton() {
-  async function doSignOut() {
-    "use server";
-    await signOut({ redirectTo: "/login" });
-  }
-  return (
-    <form action={doSignOut}>
-      <Button variant="outline" type="submit">
-        Sign out
-      </Button>
-    </form>
-  );
-}
+import { can } from "@/lib/permissions";
+import { AppShell } from "@/components/app-shell/app-shell";
 
 export default async function ClubLayout({
   children,
@@ -32,96 +16,44 @@ export default async function ClubLayout({
   // aren't ACTIVE (awaiting approval, alumni, …) — to /clubs, which explains why.
   const { club, membership } = await requireClubAccess(clubSlug);
 
-  const isExec = membership.role === "EXEC" || membership.role === "PRESIDENT";
+  // The switcher lists the user's other live memberships (§B2); the Members badge
+  // counts applications waiting on an exec (§B2). Only execs can act on those, so
+  // only execs pay for the count.
+  const [otherMemberships, pendingCount] = await Promise.all([
+    prisma.membership.findMany({
+      where: {
+        userId: membership.userId,
+        status: "ACTIVE",
+        clubId: { not: club.id },
+        club: { status: "ACTIVE" },
+      },
+      select: { club: { select: { slug: true, name: true, logoUrl: true } } },
+      orderBy: { club: { name: "asc" } },
+    }),
+    can(membership, "member:approve")
+      ? prisma.membership.count({ where: { clubId: club.id, status: "PENDING" } })
+      : Promise.resolve(0),
+  ]);
+
+  async function doSignOut() {
+    "use server";
+    await signOut({ redirectTo: "/login" });
+  }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b">
-        <div className="mx-auto w-full max-w-6xl px-4">
-          <div className="flex items-center justify-between gap-4 py-3">
-            {/* The club name is the switcher: it goes to /clubs, not to this
-                club's dashboard (the nav below already does that). */}
-            <Link
-              href="/clubs"
-              title="Switch club"
-              className="flex min-w-0 items-center gap-1.5 font-semibold hover:text-foreground/80"
-            >
-              <span className="truncate">{club.name}</span>
-              <ChevronsUpDown
-                aria-hidden
-                className="size-4 shrink-0 text-muted-foreground"
-              />
-              <span className="sr-only">Switch club</span>
-            </Link>
-            <div className="flex items-center gap-3">
-              <div className="hidden text-right sm:block">
-                <p className="text-sm font-medium leading-none">
-                  {membership.user.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {membership.user.email}
-                </p>
-              </div>
-              <Badge variant="secondary">{membership.role}</Badge>
-              <SignOutButton />
-            </div>
-          </div>
-          <nav className="-mb-px flex items-center gap-4 overflow-x-auto pb-2 text-sm text-muted-foreground">
-            <Link
-              href={`/${clubSlug}/dashboard`}
-              className="whitespace-nowrap hover:text-foreground"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href={`/${clubSlug}/members`}
-              className="whitespace-nowrap hover:text-foreground"
-            >
-              Members
-            </Link>
-            {isExec ? (
-              <Link
-                href={`/${clubSlug}/dues`}
-                className="whitespace-nowrap hover:text-foreground"
-              >
-                Dues
-              </Link>
-            ) : null}
-            <Link
-              href={`/${clubSlug}/events`}
-              className="whitespace-nowrap hover:text-foreground"
-            >
-              Events
-            </Link>
-            <Link
-              href={`/${clubSlug}/profile`}
-              className="whitespace-nowrap hover:text-foreground"
-            >
-              Profile
-            </Link>
-            {membership.role === "PRESIDENT" ? (
-              <Link
-                href={`/${clubSlug}/settings`}
-                className="whitespace-nowrap hover:text-foreground"
-              >
-                Settings
-              </Link>
-            ) : null}
-          </nav>
-        </div>
-      </header>
-      {membership.user.mustChangePassword ? (
-        <div className="border-b bg-amber-50 dark:bg-amber-950/40">
-          <div className="mx-auto w-full max-w-6xl px-4 py-2 text-sm text-amber-900 dark:text-amber-200">
-            Please{" "}
-            <Link href={`/${clubSlug}/profile`} className="font-medium underline">
-              change your password
-            </Link>{" "}
-            — you&apos;re using a default password.
-          </div>
-        </div>
-      ) : null}
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">{children}</main>
-    </div>
+    <AppShell
+      club={{ slug: club.slug, name: club.name, logoUrl: club.logoUrl }}
+      user={{
+        name: membership.user.name,
+        role: membership.role,
+        status: membership.status,
+      }}
+      otherClubs={otherMemberships.map((m) => m.club)}
+      pendingCount={pendingCount}
+      signOut={doSignOut}
+      mustChangePassword={membership.user.mustChangePassword}
+    >
+      {children}
+    </AppShell>
   );
 }

@@ -6,15 +6,13 @@ import { prisma } from "@/lib/prisma";
 import { getClubSettings } from "@/lib/club";
 import { requireClubAccess } from "@/lib/club-context";
 import type { Prisma } from "@/generated/prisma/client";
+import { Users } from "lucide-react";
+
 import { ListSkeleton } from "@/components/page-skeleton";
 import { StatusBadge } from "@/components/status-badge";
+import { EmptyState } from "@/components/empty-state";
+import { Avatar } from "@/components/date-block";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -71,6 +69,9 @@ async function MembersDirectory({
   const statusFilter = str(params.status);
   const department = str(params.department);
   const committee = str(params.committee);
+  // An empty directory reads differently depending on why: "no matches" is the
+  // filters' fault, "no members yet" is the club's.
+  const hasFilters = Boolean(q || statusFilter || department || committee);
 
   const where: Prisma.MembershipWhereInput = { clubId: club.id };
   if (statusFilter && ["ACTIVE", "INACTIVE", "ALUMNI"].includes(statusFilter)) {
@@ -109,40 +110,42 @@ async function MembersDirectory({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Members</h1>
-        <p className="text-muted-foreground">
-          {members.length} member{members.length === 1 ? "" : "s"}
-          {isExec ? ` · dues period ${settings.currentPeriod}` : ""}
-        </p>
-      </div>
+      <p className="text-[13px] text-muted-foreground">
+        {members.length} member{members.length === 1 ? "" : "s"}
+        {isExec ? ` · dues period ${settings.currentPeriod}` : ""}
+      </p>
 
+      {/* Applications waiting on an exec: a warning left edge, so the page opens on
+          the thing that needs doing (§C2). */}
       {isExec && pending.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
+        <section className="overflow-hidden rounded-xl rounded-l-none border border-l-4 border-border border-l-warning bg-surface">
+          <div className="border-b border-border px-6 py-4">
+            <h2 className="text-[15px] font-medium">
               Pending approvals ({pending.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+            </h2>
+          </div>
+          <div className="divide-y divide-border">
             {pending.map((m) => (
               <div
                 key={m.id}
-                className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div>
-                  <p className="font-medium">{m.user.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {m.user.email}
-                    {m.department ? ` · ${m.department}` : ""}
-                    {m.level ? ` · ${m.level}` : ""}
-                  </p>
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar name={m.user.name} />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{m.user.name}</p>
+                    <p className="truncate text-[13px] text-muted-foreground">
+                      {m.user.email}
+                      {m.department ? ` · ${m.department}` : ""}
+                      {m.level ? ` · ${m.level}` : ""}
+                    </p>
+                  </div>
                 </div>
                 <ApprovalButtons membershipId={m.id} />
               </div>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       ) : null}
 
       <MembersFilters
@@ -151,13 +154,20 @@ async function MembersDirectory({
       />
 
       {members.length === 0 ? (
-        <div className="rounded-md border border-dashed p-10 text-center text-muted-foreground">
-          No members match your filters.
+        <div className="rounded-xl border border-border bg-surface">
+          <EmptyState
+            icon={Users}
+            message={
+              hasFilters
+                ? "No members match your filters."
+                : "No members yet. They'll appear here once people join."
+            }
+          />
         </div>
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden overflow-x-auto rounded-md border md:block">
+          <div className="hidden overflow-x-auto rounded-xl border border-border bg-surface md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -168,7 +178,6 @@ async function MembersDirectory({
                   <TableHead>Status</TableHead>
                   {isExec ? (
                     <>
-                      <TableHead>Email</TableHead>
                       <TableHead>Phone</TableHead>
                       <TableHead>Dues</TableHead>
                     </>
@@ -177,14 +186,26 @@ async function MembersDirectory({
               </TableHeader>
               <TableBody>
                 {members.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell className="font-medium">
-                      <Link
-                        href={`/${clubSlug}/members/${m.id}`}
-                        className="hover:underline"
-                      >
-                        {m.user.name}
-                      </Link>
+                  <TableRow key={m.id} className="relative hover:bg-surface-hover">
+                    <TableCell>
+                      {/* The whole row navigates: the link stretches over it, and
+                          the cells after it sit above via `relative`. */}
+                      <div className="flex items-center gap-3">
+                        <Avatar name={m.user.name} />
+                        <div className="min-w-0">
+                          <Link
+                            href={`/${clubSlug}/members/${m.id}`}
+                            className="font-medium after:absolute after:inset-0 hover:underline"
+                          >
+                            {m.user.name}
+                          </Link>
+                          {isExec ? (
+                            <p className="truncate text-[13px] text-muted-foreground">
+                              {m.user.email}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell>{m.department ?? "—"}</TableCell>
                     <TableCell>{m.level ?? "—"}</TableCell>
@@ -194,15 +215,12 @@ async function MembersDirectory({
                     </TableCell>
                     {isExec ? (
                       <>
-                        <TableCell>{m.user.email}</TableCell>
                         <TableCell>{m.phone ?? "—"}</TableCell>
                         <TableCell>
                           {paidSet.has(m.id) ? (
-                            <Badge className="border-transparent bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300">
-                              Paid
-                            </Badge>
+                            <Badge variant="success">Paid</Badge>
                           ) : (
-                            <Badge variant="outline">Unpaid</Badge>
+                            <Badge variant="danger">Unpaid</Badge>
                           )}
                         </TableCell>
                       </>
@@ -219,24 +237,18 @@ async function MembersDirectory({
               <Link
                 key={m.id}
                 href={`/${clubSlug}/members/${m.id}`}
-                className="block rounded-md border p-4"
+                className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4 active:bg-surface-hover"
               >
-                <div className="flex items-center justify-between">
-                  <p className="font-medium">{m.user.name}</p>
-                  <StatusBadge status={m.status} />
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {m.department ?? "No department"}
-                  {m.level ? ` · Level ${m.level}` : ""}
-                  {m.committee ? ` · ${m.committee}` : ""}
-                </p>
-                {isExec ? (
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {m.user.email}
-                    {m.phone ? ` · ${m.phone}` : ""} ·{" "}
-                    {paidSet.has(m.id) ? "Dues paid" : "Dues unpaid"}
+                <Avatar name={m.user.name} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{m.user.name}</p>
+                  <p className="truncate text-[13px] text-muted-foreground">
+                    {m.department ?? "No department"}
+                    {m.level ? ` · Level ${m.level}` : ""}
+                    {isExec ? (paidSet.has(m.id) ? " · Paid" : " · Unpaid") : ""}
                   </p>
-                ) : null}
+                </div>
+                <StatusBadge status={m.status} />
               </Link>
             ))}
           </div>

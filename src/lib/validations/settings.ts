@@ -15,3 +15,21 @@ export const settingsSchema = z.object({
 });
 
 export type SettingsInput = z.input<typeof settingsSchema>;
+
+/** A 6-digit hex color, the only form `<input type="color">` ever produces. */
+const hexColor = z
+  .string()
+  .trim()
+  .regex(/^#[0-9a-fA-F]{6}$/, "Enter a hex color like #4F46E5.");
+
+/**
+ * The three colors a club picks (UI-REFACTOR §A6). Shape only — whether they are
+ * *legible together* is `validateTheme`'s job, and the action runs it server-side.
+ */
+export const themeSchema = z.object({
+  background: hexColor,
+  primary: hexColor,
+  accent: hexColor,
+});
+
+export type ThemeInput = z.input<typeof themeSchema>;

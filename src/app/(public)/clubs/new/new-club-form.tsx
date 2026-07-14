@@ -120,8 +120,10 @@ export function NewClubForm() {
         <p
           className={
             slugState.kind === "error"
-              ? "text-xs text-destructive"
-              : "text-xs text-muted-foreground"
+              ? "text-xs text-danger-tint-fg"
+              : slugState.kind === "ok"
+                ? "text-xs text-success-tint-fg"
+                : "text-xs text-muted-foreground"
           }
           role={slugState.kind === "error" ? "alert" : undefined}
         >
