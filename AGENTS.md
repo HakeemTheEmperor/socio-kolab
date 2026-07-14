@@ -22,6 +22,12 @@ Stack gotchas that differ from common tutorials:
   yields `string | null`.
 - **Auth.js v5**: config is split — `src/auth.config.ts` (edge-safe, used by the
   proxy) and `src/auth.ts` (Credentials + Prisma + bcrypt, Node only).
-- All mutations are **Server Actions** in `app/**/actions.ts`, each starting
-  with `requireMembership()` + a `can(membership, action)` check
-  (`src/lib/permissions.ts`). Never trust client-side role checks.
+- **Multi-club**: club pages live under `app/[clubSlug]/(member)/…`. Resolve the
+  club from the slug via `requireClubAccess(clubSlug)` (`src/lib/club-context.ts`)
+  — never from a global "current club". Client components get the slug from
+  `useParams()`.
+- All mutations are **Server Actions** in `app/**/actions.ts` taking `clubSlug`
+  as their first argument, each starting with `requireClubAccess(clubSlug)` + a
+  `can(membership, action)` check (`src/lib/permissions.ts`). Never trust
+  client-side role checks, and never trust the slug: it is re-resolved
+  server-side on every call.

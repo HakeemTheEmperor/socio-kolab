@@ -1,13 +1,12 @@
-import { cache } from "react";
-import { prisma } from "@/lib/prisma";
-
-/** Shape of Club.settings (see SPEC §4). */
+/** Shape of Club.settings (see SPEC §4 and MULTI-CLUB.md §1). */
 export interface ClubSettings {
   duesAmount: number;
   currency: string;
   currentPeriod: string;
   departments: string[];
   committees: string[];
+  /** Whether the club accepts self-service membership applications. */
+  membershipOpen: boolean;
 }
 
 const DEFAULT_SETTINGS: ClubSettings = {
@@ -16,22 +15,14 @@ const DEFAULT_SETTINGS: ClubSettings = {
   currentPeriod: "",
   departments: [],
   committees: [],
+  membershipOpen: true,
 };
 
 /**
- * Resolve the current club. v1 is single-tenant: there is exactly one club row.
- * Every query is scoped through here rather than hardcoding a club id inline,
- * so multi-club support can be added later without a rewrite.
+ * Parse Club.settings JSON into a typed object with safe defaults.
+ *
+ * The club itself is resolved from the URL slug — see `lib/club-context.ts`.
  */
-export const getCurrentClub = cache(async () => {
-  const club = await prisma.club.findFirst();
-  if (!club) {
-    throw new Error("No club configured. Run `npm run db:seed`.");
-  }
-  return club;
-});
-
-/** Parse Club.settings JSON into a typed object with safe defaults. */
 export function getClubSettings(settings: unknown): ClubSettings {
   if (settings && typeof settings === "object") {
     return { ...DEFAULT_SETTINGS, ...(settings as Partial<ClubSettings>) };

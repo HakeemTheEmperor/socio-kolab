@@ -15,20 +15,28 @@ export const authConfig = {
   },
   providers: [],
   callbacks: {
-    // Runs in middleware for every matched request.
+    // Runs in the proxy (Next 16's middleware) for every matched request.
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const { pathname } = nextUrl;
-      const isAuthRoute = pathname === "/login" || pathname === "/register";
 
-      if (isAuthRoute) {
+      // Signing in is global; a signed-in visitor has no business there.
+      if (pathname === "/login") {
         if (isLoggedIn) {
-          return Response.redirect(new URL("/dashboard", nextUrl));
+          return Response.redirect(new URL("/clubs", nextUrl));
         }
         return true;
       }
 
-      // Every other matched route requires a session.
+      // /{clubSlug}/register is public, and stays reachable when signed in: an
+      // existing user applying to a second club must not need a second account.
+      if (/^\/[^/]+\/register\/?$/.test(pathname)) {
+        return true;
+      }
+
+      // Every other matched route requires a session. Whether that session may
+      // see the club it asked for is decided server-side, per club, by
+      // `requireClubAccess` — the proxy only knows that *someone* is signed in.
       return isLoggedIn;
     },
     // Expose the user id on the session (JWT `sub`).

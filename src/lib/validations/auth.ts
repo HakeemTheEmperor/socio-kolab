@@ -21,5 +21,16 @@ export const registerSchema = z.object({
   level: optionalText,
 });
 
+/**
+ * Applying to a club while already signed in: the account already exists, so
+ * only the per-club membership profile is collected.
+ */
+export const joinClubSchema = z.object({
+  phone: optionalText,
+  department: optionalText,
+  level: optionalText,
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
+export type JoinClubInput = z.infer<typeof joinClubSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;

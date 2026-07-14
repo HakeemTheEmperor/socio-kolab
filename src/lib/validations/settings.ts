@@ -10,6 +10,8 @@ export const settingsSchema = z.object({
   currentPeriod: z.string().trim().min(1, "Current period is required.").max(20),
   departments: z.array(z.string().trim().min(1).max(100)).max(50),
   committees: z.array(z.string().trim().min(1).max(100)).max(50),
+  /** Whether /{clubSlug}/register accepts self-service applications. */
+  membershipOpen: z.boolean(),
 });
 
 export type SettingsInput = z.input<typeof settingsSchema>;
