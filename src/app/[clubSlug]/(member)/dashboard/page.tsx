@@ -15,7 +15,15 @@ import {
 import { StatCard } from "@/components/stat-card";
 import { EmptyState } from "@/components/empty-state";
 import { DateBlock } from "@/components/date-block";
-import { CalendarCheck, CalendarDays, CheckCircle2, Clock, TriangleAlert, Users, Wallet } from "lucide-react";
+import {
+  CalendarCheck,
+  CalendarDays,
+  CheckCircle2,
+  Clock,
+  TriangleAlert,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { RsvpButtons } from "../events/rsvp-buttons";
 
 export const metadata: Metadata = { title: "Dashboard — Club Portal" };
@@ -60,7 +68,9 @@ export default async function DashboardPage({
   if (isExec) {
     const [activeCount, pendingCount, paidActive] = await Promise.all([
       prisma.membership.count({ where: { clubId: club.id, status: "ACTIVE" } }),
-      prisma.membership.count({ where: { clubId: club.id, status: "PENDING" } }),
+      prisma.membership.count({
+        where: { clubId: club.id, status: "PENDING" },
+      }),
       prisma.duesRecord.count({
         where: { clubId: club.id, period, membership: { status: "ACTIVE" } },
       }),
@@ -110,15 +120,15 @@ export default async function DashboardPage({
           <div className="text-danger-tint-fg">
             <p className="text-[15px] font-medium">Unpaid for {period}</p>
             <p className="text-[13px] opacity-90">
-              Dues of {formatCurrency(settings.duesAmount, settings.currency)} are
-              outstanding — see the treasurer to pay.
+              Dues of {formatCurrency(settings.duesAmount, settings.currency)}{" "}
+              are outstanding — see the treasurer to pay.
             </p>
           </div>
         </div>
       )}
 
       {stats ? (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-1 xs:grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard
             label="Active members"
             value={String(stats.activeCount)}
@@ -158,29 +168,36 @@ export default async function DashboardPage({
 
         {events.length === 0 ? (
           <div className="rounded-xl border border-border bg-surface">
-            <EmptyState icon={CalendarDays} message="No upcoming events." />
+            <EmptyState
+              icon={CalendarDays}
+              message="No upcoming events."
+            />
           </div>
         ) : (
           <div className="space-y-3">
             {events.map((e) => (
               <div
                 key={e.id}
-                className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-surface p-6"
+                className="flex flex-col sm:flex-row flex-wrap items-center gap-4 rounded-xl border border-border bg-surface p-6"
               >
                 <DateBlock date={e.startsAt} />
                 <div className="min-w-0 flex-1">
                   <Link
                     href={`/${clubSlug}/events/${e.id}`}
-                    className="text-[15px] font-medium hover:underline"
+                    className="text-[15px] text-center sm:text-start font-medium hover:underline"
                   >
                     {e.title}
                   </Link>
                   <p className="text-[13px] text-muted-foreground">
                     {formatDateTime(e.startsAt)}
-                    {e.location ? ` · ${e.location}` : ""} · {e.goingCount} going
+                    {e.location ? ` · ${e.location}` : ""} · {e.goingCount}{" "}
+                    going
                   </p>
                 </div>
-                <RsvpButtons eventId={e.id} current={e.myRsvp} />
+                <RsvpButtons
+                  eventId={e.id}
+                  current={e.myRsvp}
+                />
               </div>
             ))}
           </div>
@@ -191,7 +208,10 @@ export default async function DashboardPage({
         <CardHeader>
           <CardTitle className="text-[15px]">Your profile</CardTitle>
           <CardDescription>
-            <Link href={`/${clubSlug}/profile`} className="underline">
+            <Link
+              href={`/${clubSlug}/profile`}
+              className="underline"
+            >
               Edit profile
             </Link>
           </CardDescription>

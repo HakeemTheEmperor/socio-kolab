@@ -77,18 +77,25 @@ export default async function MemberDetailPage({
         href={`/${clubSlug}/members`}
         className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft aria-hidden strokeWidth={1.75} className="size-4" />
+        <ArrowLeft
+          aria-hidden
+          strokeWidth={1.75}
+          className="size-4"
+        />
         Members
       </Link>
 
       {/* Two columns on desktop: who they are on the left, what they've done on
           the right. Stacked on mobile (§C2). */}
-      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr] border-2 border-red-500">
         <div className="space-y-6">
           <Card>
             <CardContent className="space-y-4 p-6">
               <div className="flex items-center gap-3">
-                <Avatar name={member.user.name} className="size-12 text-sm" />
+                <Avatar
+                  name={member.user.name}
+                  className="size-12 text-sm"
+                />
                 <div className="min-w-0">
                   <h1 className="truncate text-[15px] font-medium">
                     {member.user.name}
@@ -101,14 +108,32 @@ export default async function MemberDetailPage({
               </div>
 
               <div className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2 lg:grid-cols-1">
-                <Field label="Department" value={member.department ?? "—"} />
-                <Field label="Level" value={member.level ?? "—"} />
-                <Field label="Committee" value={member.committee ?? "—"} />
-                <Field label="Joined" value={formatDate(member.joinedAt)} />
+                <Field
+                  label="Department"
+                  value={member.department ?? "—"}
+                />
+                <Field
+                  label="Level"
+                  value={member.level ?? "—"}
+                />
+                <Field
+                  label="Committee"
+                  value={member.committee ?? "—"}
+                />
+                <Field
+                  label="Joined"
+                  value={formatDate(member.joinedAt)}
+                />
                 {canViewFull ? (
                   <>
-                    <Field label="Email" value={member.user.email} />
-                    <Field label="Phone" value={member.phone ?? "—"} />
+                    <Field
+                      label="Email"
+                      value={member.user.email}
+                    />
+                    <Field
+                      label="Phone"
+                      value={member.phone ?? "—"}
+                    />
                   </>
                 ) : null}
               </div>
@@ -142,94 +167,106 @@ export default async function MemberDetailPage({
         </div>
 
         <div className="space-y-6">
-      {canViewFull ? (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-[15px]">Dues history</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {member.dues.length === 0 ? (
-                <EmptyState icon={Wallet} message="No dues recorded yet." />
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Period</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Method</TableHead>
-                        <TableHead>Note</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {member.dues.map((d) => (
-                        <TableRow key={d.id}>
-                          <TableCell>{d.period}</TableCell>
-                          <TableCell>
-                            {formatCurrency(d.amount, settings.currency)}
-                          </TableCell>
-                          <TableCell>{formatDate(d.paidAt)}</TableCell>
-                          <TableCell>{d.method ?? "—"}</TableCell>
-                          <TableCell>{d.note ?? "—"}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {canViewFull ? (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-[15px]">Dues history</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {member.dues.length === 0 ? (
+                    <EmptyState
+                      icon={Wallet}
+                      message="No dues recorded yet."
+                    />
+                  ) : (
+                    <div className="overflow-x-scroll">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Period</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Method</TableHead>
+                            <TableHead>Note</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {member.dues.map((d) => (
+                            <TableRow key={d.id}>
+                              <TableCell>{d.period}</TableCell>
+                              <TableCell>
+                                {formatCurrency(d.amount, settings.currency)}
+                              </TableCell>
+                              <TableCell>{formatDate(d.paidAt)}</TableCell>
+                              <TableCell>{d.method ?? "—"}</TableCell>
+                              <TableCell>{d.note ?? "—"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-[15px]">Attendance history</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {member.attendance.length === 0 ? (
-                <EmptyState icon={CalendarDays} message="No event activity yet." />
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Event</TableHead>
-                        <TableHead>When</TableHead>
-                        <TableHead>RSVP</TableHead>
-                        <TableHead>Checked in</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {member.attendance.map((a) => (
-                        <TableRow key={a.id}>
-                          <TableCell className="font-medium">
-                            {a.event.title}
-                          </TableCell>
-                          <TableCell>{formatDateTime(a.event.startsAt)}</TableCell>
-                          <TableCell>
-                            {a.rsvp ? a.rsvp.replace("_", " ") : "—"}
-                          </TableCell>
-                          <TableCell>
-                            {a.checkedInAt ? formatDate(a.checkedInAt) : "No"}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      ) : (
-        <Card>
-          <CardContent className="p-6 text-[13px] text-muted-foreground">
-            You can only view full details (contact info, dues, attendance) for
-            your own profile.
-          </CardContent>
-        </Card>
-      )}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-[15px]">
+                    Attendance history
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {member.attendance.length === 0 ? (
+                    <EmptyState
+                      icon={CalendarDays}
+                      message="No event activity yet."
+                    />
+                  ) : (
+                    <div className="overflow-x-scroll">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Event</TableHead>
+                            <TableHead>When</TableHead>
+                            <TableHead>RSVP</TableHead>
+                            <TableHead>Checked in</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {member.attendance.map((a) => (
+                            <TableRow key={a.id}>
+                              <TableCell className="font-medium">
+                                {a.event.title}
+                              </TableCell>
+                              <TableCell>
+                                {formatDateTime(a.event.startsAt)}
+                              </TableCell>
+                              <TableCell>
+                                {a.rsvp ? a.rsvp.replace("_", " ") : "—"}
+                              </TableCell>
+                              <TableCell>
+                                {a.checkedInAt
+                                  ? formatDate(a.checkedInAt)
+                                  : "No"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <Card>
+              <CardContent className="p-6 text-[13px] text-muted-foreground">
+                You can only view full details (contact info, dues, attendance)
+                for your own profile.
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
