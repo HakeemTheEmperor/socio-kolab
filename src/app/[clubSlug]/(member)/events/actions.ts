@@ -179,3 +179,34 @@ export async function toggleCheckIn(
   revalidatePath(`/${clubSlug}/members/${membershipId}`);
   return { ok: true };
 }
+
+/**
+ * Check a guest in/out (EVENT-FORMS.md §5.1). Guests have no membership, so they
+ * are addressed by their existing Attendance row — a guest can only be checked in
+ * if they registered. The `membershipId: null` filter guarantees this never
+ * touches a member row, and `eventId` keeps it scoped to this event.
+ */
+export async function toggleGuestCheckIn(
+  clubSlug: string,
+  eventId: string,
+  attendanceId: string,
+  checkedIn: boolean,
+): Promise<ActionResult> {
+  const { club, membership: me } = await requireClubAccess(clubSlug);
+  if (!can(me, "event:checkIn")) return { ok: false, error: "Not authorized." };
+
+  const event = await findEventInClub(club.id, eventId);
+  if (!event) return { ok: false, error: "Event not found." };
+
+  const result = await prisma.attendance.updateMany({
+    where: { id: attendanceId, eventId, membershipId: null },
+    data: {
+      checkedInAt: checkedIn ? new Date() : null,
+      checkedInById: checkedIn ? me.id : null,
+    },
+  });
+  if (result.count === 0) return { ok: false, error: "Registration not found." };
+
+  revalidatePath(`/${clubSlug}/events/${eventId}`);
+  return { ok: true };
+}

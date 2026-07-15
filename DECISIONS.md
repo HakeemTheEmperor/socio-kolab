@@ -1086,3 +1086,66 @@ each); a second distinct guest is allowed (NULLs distinct); guest rows carry
 round-trips. The action's own orchestration (auth/`revalidatePath`, which need
 Next's request scope) is covered by `tsc` + `next build` + review, since it can't
 run outside the server.
+
+## Event forms step 5 — Exec responses view + CSV export
+
+### Responses is a stacked exec card, not a literal "tab"
+§5.1 says "add a Responses tab alongside the existing RSVP/check-in views", but the
+event detail page has never used tabs — RSVPs and Check-in are stacked `Card`s, and
+RSVPs is member-visible while Check-in is exec-only, so a shared tab strip would mix
+audiences. Responses is therefore a third **exec-only card** (between RSVPs and
+Check-in), consistent with the page. Its header carries the count + member/guest
+split, the copy-link, and Export CSV; the intake toggle already lives in the page
+header (Phase 2), so it isn't duplicated here.
+
+### "Responses" = every Attendance row, because that IS the registration record
+There is no stored flag distinguishing a public-form registration from an internal
+RSVP or a check-in — they are all `Attendance` (§1.2, "the single registration
+record"). Rather than guess intent from empty `formResponses`, the table lists every
+attendance row, with custom columns showing "—" where a member never answered them.
+Guests (no membership) are always form registrations; members may be either. The
+member/guest split counts `membershipId` null vs. set.
+
+### One column-derivation helper for the table and the CSV
+`deriveResponseColumns(formSchema, responsesList)` (`lib/event-responses.ts`) returns
+the columns — current-schema fields in order, then each orphaned response key once as
+"(removed field)" — and is called by both the on-screen table and the CSV route, so
+their headers can't drift. Cell formatting differs by medium on purpose:
+`responseCellText` renders checkbox as Yes/— (blank → —) for the table;
+`responseCellCsv` renders Yes/No (blank → empty) so a spreadsheet gets data, not an
+em-dash. Both live in the same module and are unit-tested.
+
+### CSV is a route handler, not a server action
+`events/[id]/responses/route.ts` (`GET`) so the browser downloads natively via
+`Content-Disposition`. Route handlers bypass the `(member)` layout guard, so it
+re-runs the checks itself: `requireClubAccess` (redirects a logged-out or non-member
+caller) + `can(event:manage)` (403 for a non-exec) + a compound `{ id, clubId }`
+fetch (404 for another club's event id). `csvCell` applies the §5.2 formula-injection
+guard — a value starting with `=`, `+`, `-`, or `@` is prefixed with `'` — then
+RFC-4180 quoting; a `String.fromCharCode(0xFEFF)` BOM makes Excel read it as UTF-8;
+timestamps are Africa/Lagos; the filename is `slugify(title)-responses.csv`.
+
+### Guests join the check-in list; a guest is checked in by Attendance id
+§5.1 wants guests in check-in too. `CheckInMember` became `CheckInEntry` with a
+`kind` ("member" | "guest") and a `targetId` (membershipId or Attendance id), and the
+list renders a "Guest" badge. Members keep the `toggleCheckIn` upsert-by-membership
+path; guests use a new `toggleGuestCheckIn` that `updateMany`s the row filtered by
+`{ id, eventId, membershipId: null }` — the null filter guarantees it can never
+touch a member row (verified live: the same filter against a member id matches zero
+rows), and a guest with no registration simply has no row to check in.
+
+### Null-membership audit
+The RSVP-count queries were already null-safe (they filter on `rsvp`/compare
+`membershipId` to a real id, so guest NULLs never match); the detail RSVP list was
+fixed in step 1; the check-in map is now built only from member rows and guests are
+added explicitly. No query dereferences a possibly-null membership.
+
+### Verified live against the local dev database
+A throwaway script created a member and a guest registration (one value with a comma,
+a nickname of `=SUM(9)`, and an orphaned `oldfield` key) on a real club, then built
+the rows + CSV through the exact route code path and asserted: columns end in
+"(removed field)"; guest row uses guestName/guestEmail and member row the account's;
+the comma value is quoted, the checkbox exports Yes/No, and `=SUM(9)` exports inert
+as `'=SUM(9)`; the filename slugifies to `frosh-week-mixer-responses.csv`; and guest
+check-in updates exactly one guest row while the member-scoped filter touches none.
+9/9 green, rows cleaned up after.

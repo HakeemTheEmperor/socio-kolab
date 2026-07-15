@@ -21,7 +21,8 @@ import { DeleteEventButton } from "../delete-event-button";
 import { IntakeToggle } from "../intake-toggle";
 import { CopyRegisterLink } from "../copy-register-link";
 import { RsvpButtons } from "../rsvp-buttons";
-import { CheckInList, type CheckInMember } from "./check-in-list";
+import { CheckInList, type CheckInEntry } from "./check-in-list";
+import { ResponsesSection, type ResponseRow } from "./responses-section";
 
 export const metadata: Metadata = { title: "Event — Club Portal" };
 
@@ -54,33 +55,62 @@ export default async function EventDetailPage({
   const myRsvp =
     event.attendance.find((a) => a.membershipId === me.id)?.rsvp ?? null;
 
-  // Check-in view (exec): all ACTIVE members, RSVP'd sorted to top.
-  let checkInMembers: CheckInMember[] = [];
+  // Exec views: the check-in list (ACTIVE members + guests, RSVP'd sorted to
+  // top) and the responses table (every registration record).
+  let checkInEntries: CheckInEntry[] = [];
+  let responseRows: ResponseRow[] = [];
   if (isExec) {
     const activeMembers = await prisma.membership.findMany({
       where: { clubId: club.id, status: "ACTIVE" },
       include: { user: true },
     });
     const attByMember = new Map(
-      event.attendance.map((a) => [a.membershipId, a]),
+      event.attendance
+        .filter((a) => a.membershipId !== null)
+        .map((a) => [a.membershipId, a]),
     );
-    checkInMembers = activeMembers
-      .map((m) => {
-        const a = attByMember.get(m.id);
-        return {
-          membershipId: m.id,
-          name: m.user.name,
-          department: m.department,
-          rsvp: a?.rsvp ?? null,
-          checkedIn: !!a?.checkedInAt,
-        };
-      })
-      .sort((a, b) => {
-        const ar = a.rsvp ? 0 : 1;
-        const br = b.rsvp ? 0 : 1;
-        if (ar !== br) return ar - br;
-        return a.name.localeCompare(b.name);
-      });
+    const memberEntries: CheckInEntry[] = activeMembers.map((m) => {
+      const a = attByMember.get(m.id);
+      return {
+        kind: "member",
+        targetId: m.id,
+        name: m.user.name,
+        department: m.department,
+        rsvp: a?.rsvp ?? null,
+        checkedIn: !!a?.checkedInAt,
+      };
+    });
+    // Guests attend like anyone else, so they belong in check-in too (§5.1).
+    const guestEntries: CheckInEntry[] = event.attendance
+      .filter((a) => a.membershipId === null)
+      .map((a) => ({
+        kind: "guest",
+        targetId: a.id,
+        name: a.guestName ?? "Guest",
+        department: null,
+        rsvp: a.rsvp,
+        checkedIn: !!a.checkedInAt,
+      }));
+    checkInEntries = [...memberEntries, ...guestEntries].sort((a, b) => {
+      const ar = a.rsvp ? 0 : 1;
+      const br = b.rsvp ? 0 : 1;
+      if (ar !== br) return ar - br;
+      return a.name.localeCompare(b.name);
+    });
+
+    responseRows = event.attendance
+      .map((a) => ({
+        id: a.id,
+        name: a.membership?.user.name ?? a.guestName ?? "—",
+        email: a.membership?.user.email ?? a.guestEmail ?? "—",
+        registeredAt: a.createdAt,
+        isGuest: a.membershipId === null,
+        responses:
+          a.formResponses && typeof a.formResponses === "object"
+            ? (a.formResponses as Record<string, unknown>)
+            : {},
+      }))
+      .sort((x, y) => x.registeredAt.getTime() - y.registeredAt.getTime());
   }
 
   return (
@@ -194,14 +224,33 @@ export default async function EventDetailPage({
       {isExec ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Check-in</CardTitle>
+            <CardTitle className="text-base">Responses</CardTitle>
             <CardDescription>
-              Mark attendance for active members. RSVP&apos;d members are listed
-              first.
+              Registrations through the public form, members and guests.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <CheckInList eventId={event.id} members={checkInMembers} />
+            <ResponsesSection
+              clubSlug={clubSlug}
+              eventId={event.id}
+              formSchema={parseFormSchema(event.formSchema)}
+              rows={responseRows}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {isExec ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Check-in</CardTitle>
+            <CardDescription>
+              Mark attendance for active members and registered guests.
+              RSVP&apos;d attendees are listed first.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CheckInList eventId={event.id} entries={checkInEntries} />
           </CardContent>
         </Card>
       ) : null}
