@@ -1029,3 +1029,60 @@ needs the Phase 1 migration applied to the database first.
 `CopyRegisterLink` (exec detail header) copies `origin + /{slug}/events/{id}/register`
 — the WhatsApp-blast link (§3.4). The optional builder live-preview stays deferred
 as non-essential polish; it can now reuse `DynamicForm` whenever it's wanted.
+
+## Event forms step 4 — Submit action end-to-end
+
+### The action resolves the club itself instead of `getClubBySlug`
+`getClubBySlug` 404s (throws) on a missing/unapproved slug — right for a page,
+wrong for an action that must return a state. `submitEventRegistrationAction`
+therefore does its own `club.findFirst({ slug, status: ACTIVE })` and returns a
+deliberately vague `GENERIC` message on any club/event miss: this action answers
+to forged and replayed POSTs, which should learn nothing about what exists. The
+event is fetched compound-scoped (`{ id, clubId }`), so a club A event id POSTed
+under club B's slug simply doesn't resolve.
+
+### The intake gate is step 3, before any answer is read
+`acceptingResponses === false` OR past (instant compare — `startsAt` already
+encodes Lagos wall-clock) returns the closed message before the form fields are
+touched. This is the real control against replayed/scripted POSTs; the register
+page's closed screen is cosmetic. The honeypot (`company`) is step 4 — a non-empty
+value returns `{ ok: true }` and writes nothing, so a bot sees success.
+
+### Viewer identity is re-derived server-side; a member's account wins
+Step 6 re-resolves the session → membership in THIS club. An ACTIVE member writes
+with `membershipId` and their submitted `name`/`email` are ignored entirely (the
+locked form doesn't even render them, but a forged POST can't override their
+identity). Everyone else is a guest, and only then is the core `name`/`email`
+validated with `coreRegistrantSchema` (lowercased/trimmed email). Response
+(`custom_*`) validation happens independently at step 5; the two error sets are
+merged so the registrant sees every problem at once. An unrecognised `custom_*`
+key has no input to attach to, so it becomes a form-level message, not a field
+error — and nothing is written.
+
+### Duplicates: check then rely on the constraints for the race
+Step 7 looks up the existing row (member by `eventId_membershipId`, guest by
+`eventId_guestEmail`) and returns the friendly duplicate message. The write is
+still wrapped in a `try/catch` for `P2002` returning the same message, because two
+concurrent submits pass the check together and only the unique index can arbitrate.
+The row is built as EITHER a member OR a guest payload — the XOR the schema can't
+express, enforced here by construction.
+
+### A required number must not coerce blank to 0 (bug found while wiring the action)
+`z.coerce.number()` turns `""` into `0`, which would let a **required** number
+field pass empty on a forged/JS-off POST. `fieldValidator` now runs
+`blankToUndefined` *before* coercion for numbers, so blank → `undefined` → `NaN` →
+fails `required` (and is omitted when optional). Covered by a new unit test.
+
+### Verified live against the local dev database
+The migration was applied (`migrate deploy`) and a throwaway script drove the exact
+validators + Prisma writes/constraints the action depends on, against a real
+seeded club — then deleted its own rows. All 15 checks green: schema columns
+round-trip; a valid submission stores `{fieldId: value}` with checkbox→true and a
+blank optional omitted; select-out-of-options, unknown `custom_*`, blank-required-
+number and blank-required-text are all rejected (nothing written); core email is
+normalised; duplicate guest email and duplicate member both raise `P2002` (one row
+each); a second distinct guest is allowed (NULLs distinct); guest rows carry
+`guestEmail`/null `membershipId` and member rows the reverse; the intake flag
+round-trips. The action's own orchestration (auth/`revalidatePath`, which need
+Next's request scope) is covered by `tsc` + `next build` + review, since it can't
+run outside the server.

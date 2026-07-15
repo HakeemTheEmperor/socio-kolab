@@ -142,9 +142,10 @@ function fieldValidator(field: FormField): z.ZodTypeAny {
     }
     case "number": {
       const base = z.coerce.number().refine(Number.isFinite, "Enter a valid number.");
-      return required
-        ? base
-        : z.preprocess(blankToUndefined, base.optional());
+      // Blank must collapse to undefined FIRST — otherwise `z.coerce.number("")`
+      // is 0, which would let a required field pass empty. undefined → NaN →
+      // fails `required`; for optional it is simply omitted.
+      return z.preprocess(blankToUndefined, required ? base : base.optional());
     }
     case "select": {
       const opts = field.options ?? [];

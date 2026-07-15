@@ -188,6 +188,11 @@ describe("buildResponseValidator — number", () => {
     expect(v.safeParse({ [key("n")]: "abc" }).success).toBe(false);
   });
 
+  it("rejects a required number left blank (does not coerce '' to 0)", () => {
+    expect(v.safeParse({ [key("n")]: "" }).success).toBe(false);
+    expect(v.safeParse({}).success).toBe(false);
+  });
+
   it("omits an optional number left blank", () => {
     const opt = buildResponseValidator([field({ id: "n", type: "number", required: false })]);
     const result = opt.safeParse({ [key("n")]: "" });
