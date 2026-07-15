@@ -1149,3 +1149,44 @@ the comma value is quoted, the checkbox exports Yes/No, and `=SUM(9)` exports in
 as `'=SUM(9)`; the filename slugifies to `frosh-week-mixer-responses.csv`; and guest
 check-in updates exactly one guest row while the member-scoped filter touches none.
 9/9 green, rows cleaned up after.
+
+## Event forms step 6 — Docs + acceptance click-through
+
+### The public event-register route needed a proxy exemption
+The edge proxy (`auth.config.ts`) treats every matched route as auth-required
+except an explicit allowlist, which only covered `/{slug}/register`. The new
+`/{slug}/events/{id}/register` was therefore 307-redirecting anonymous visitors to
+`/login` — the whole point of the feature is that it's public. Added a second regex
+(`^/[^/]+/events/[^/]+/register/?$`) alongside the club-join one. This was a
+Phase-3 miss surfaced only by the live click-through (the page and action were
+correct; the proxy in front of them wasn't). Membership/club scoping is still
+decided server-side per request, as for every route — the proxy only waves the
+page through.
+
+### README
+Added an "Event registration forms" section (builder, intake toggle, the three
+public viewer states, the server-side submit boundary, and exec responses + CSV),
+a URL-table row for `/{clubSlug}/events/{id}/register`, and the two new `lib/`
+modules + route locations in the project-structure tree.
+
+### Acceptance checklist — verified
+Driven against a running dev server on a seeded database (public pages over HTTP)
+plus the Phase-4/5 live DB scripts and `next build`:
+
+- **Closed intake** → the register page returns a card with **zero** `<input>`,
+  `<select>`, or `<textarea>` elements and the "no longer accepting" copy; the
+  open form renders name, email, the `custom_*` fields, and the honeypot. A
+  replayed POST to a closed form is rejected server-side (Phase-4 intake gate).
+- **Cross-club** → club A's event id under club B's slug is a **404**; so are a
+  missing event id and an unknown slug (one indistinguishable 404).
+- **Duplicate** guest email / repeat member → friendly error, one row (`P2002`).
+- **Select-out-of-options / unknown `custom_*`** → rejected, nothing persisted.
+- **Removed field** → prior answers retained under "(removed field)" in the table
+  and CSV.
+- **CSV** → `=1+1`-style values export inert (`'` prefix); UTF-8 BOM + Lagos
+  timestamps; slugified filename.
+- **`next build`** → passes with zero TypeScript errors.
+
+The two interactive-only items — keyboard-only drag-reorder of fields, and opening
+the CSV in Excel — follow the documented dnd-kit keyboard-sensor path and the
+BOM/escaping rules respectively, and want a final human eyeball in the browser.
