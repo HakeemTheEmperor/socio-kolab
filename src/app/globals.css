@@ -18,6 +18,7 @@
  */
 @theme inline {
   /* Tokens as Tailwind utilities: bg-surface, border-border-strong, text-faint… */
+  --breakpoint-xs: 475px;
   --color-surface: var(--surface);
   --color-surface-hover: var(--surface-hover);
   --color-border-strong: var(--border-strong);

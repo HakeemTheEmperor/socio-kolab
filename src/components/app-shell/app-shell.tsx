@@ -52,7 +52,10 @@ export function AppShell({ children, mustChangePassword, ...sidebar }: AppShellP
           <h1 className="min-w-0 flex-1 truncate text-lg font-medium">{title}</h1>
 
           {/* Pages portal their contextual action here (see topbar-actions.tsx). */}
-          <div id={TOPBAR_ACTIONS_ID} className="flex items-center gap-2" />
+          <div
+            id={TOPBAR_ACTIONS_ID}
+            className="flex min-w-0 items-center gap-2"
+          />
         </header>
 
         {mustChangePassword ? (

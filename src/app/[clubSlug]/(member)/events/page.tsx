@@ -36,7 +36,7 @@ function EventCard({
 }) {
   return (
     <div className="rounded-xl border border-border bg-surface p-6">
-      <div className="flex items-start gap-4">
+      <div className="flex flex-col sm:flex-row items-start gap-4">
         <DateBlock date={event.startsAt} />
         <div className="min-w-0 flex-1">
           <Link
@@ -47,17 +47,29 @@ function EventCard({
           </Link>
           <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
-              <Clock aria-hidden strokeWidth={1.75} className="size-4" />
+              <Clock
+                aria-hidden
+                strokeWidth={1.75}
+                className="size-4"
+              />
               {formatDateTime(event.startsAt)}
             </span>
             {event.location ? (
               <span className="inline-flex items-center gap-1.5">
-                <MapPin aria-hidden strokeWidth={1.75} className="size-4" />
+                <MapPin
+                  aria-hidden
+                  strokeWidth={1.75}
+                  className="size-4"
+                />
                 {event.location}
               </span>
             ) : null}
             <span className="inline-flex items-center gap-1.5">
-              <Users aria-hidden strokeWidth={1.75} className="size-4" />
+              <Users
+                aria-hidden
+                strokeWidth={1.75}
+                className="size-4"
+              />
               {event.goingCount} going
             </span>
           </div>
@@ -65,7 +77,10 @@ function EventCard({
       </div>
       {upcoming ? (
         <div className="mt-4">
-          <RsvpButtons eventId={event.id} current={event.myRsvp} />
+          <RsvpButtons
+            eventId={event.id}
+            current={event.myRsvp}
+          />
         </div>
       ) : null}
     </div>
@@ -102,17 +117,21 @@ async function EventsList({ clubSlug }: { clubSlug: string }) {
     include: { attendance: { select: { rsvp: true, membershipId: true } } },
   });
 
-  const mapped: (EventWithRsvp & { startsAtDate: Date })[] = events.map((e) => ({
-    id: e.id,
-    title: e.title,
-    location: e.location,
-    startsAt: e.startsAt,
-    startsAtDate: e.startsAt,
-    goingCount: e.attendance.filter((a) => a.rsvp === "GOING").length,
-    myRsvp: e.attendance.find((a) => a.membershipId === me.id)?.rsvp ?? null,
-  }));
+  const mapped: (EventWithRsvp & { startsAtDate: Date })[] = events.map(
+    (e) => ({
+      id: e.id,
+      title: e.title,
+      location: e.location,
+      startsAt: e.startsAt,
+      startsAtDate: e.startsAt,
+      goingCount: e.attendance.filter((a) => a.rsvp === "GOING").length,
+      myRsvp: e.attendance.find((a) => a.membershipId === me.id)?.rsvp ?? null,
+    }),
+  );
 
-  const upcoming = mapped.filter((e) => e.startsAtDate.getTime() >= now.getTime());
+  const upcoming = mapped.filter(
+    (e) => e.startsAtDate.getTime() >= now.getTime(),
+  );
   const past = mapped
     .filter((e) => e.startsAtDate.getTime() < now.getTime())
     .reverse();
@@ -127,11 +146,16 @@ async function EventsList({ clubSlug }: { clubSlug: string }) {
 
       <Tabs defaultValue="upcoming">
         <TabsList>
-          <TabsTrigger value="upcoming">Upcoming ({upcoming.length})</TabsTrigger>
+          <TabsTrigger value="upcoming">
+            Upcoming ({upcoming.length})
+          </TabsTrigger>
           <TabsTrigger value="past">Past ({past.length})</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="upcoming" className="space-y-3">
+        <TabsContent
+          value="upcoming"
+          className="space-y-3"
+        >
           {upcoming.length === 0 ? (
             <div className="rounded-xl border border-border bg-surface">
               <EmptyState
@@ -143,15 +167,26 @@ async function EventsList({ clubSlug }: { clubSlug: string }) {
             </div>
           ) : (
             upcoming.map((e) => (
-              <EventCard key={e.id} clubSlug={clubSlug} event={e} upcoming />
+              <EventCard
+                key={e.id}
+                clubSlug={clubSlug}
+                event={e}
+                upcoming
+              />
             ))
           )}
         </TabsContent>
 
-        <TabsContent value="past" className="space-y-3">
+        <TabsContent
+          value="past"
+          className="space-y-3"
+        >
           {past.length === 0 ? (
             <div className="rounded-xl border border-border bg-surface">
-              <EmptyState icon={CalendarDays} message="No past events yet." />
+              <EmptyState
+                icon={CalendarDays}
+                message="No past events yet."
+              />
             </div>
           ) : (
             past.map((e) => (

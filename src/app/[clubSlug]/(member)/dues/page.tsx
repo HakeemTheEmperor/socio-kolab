@@ -99,7 +99,7 @@ export default async function DuesPage({
         <ExportCsvButton rows={csvRows} period={selected} />
       </TopbarActions>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 xs:grid-cols-2 gap-4 lg:grid-cols-3">
         <StatCard
           label="Paid"
           value={`${paidCount}/${activeMembers.length}`}

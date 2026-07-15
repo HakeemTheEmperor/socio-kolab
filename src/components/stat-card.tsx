@@ -28,11 +28,13 @@ export function StatCard({
     <div
       className={cn(
         "flex h-full items-start justify-between gap-3 rounded-xl border p-6",
-        warning ? "border-warning/30 bg-warning-tint" : "border-border bg-surface",
+        warning
+          ? "border-warning/30 bg-warning-tint"
+          : "border-border bg-surface",
         href && "transition-colors hover:border-border-strong",
       )}
     >
-      <div>
+      <div className="min-w-0">
         <p
           className={cn(
             "text-[13px]",
@@ -41,7 +43,9 @@ export function StatCard({
         >
           {label}
         </p>
-        <p className="mt-1 text-[28px] font-semibold leading-none">{value}</p>
+        <p className="mt-1 truncate text-2xl font-semibold leading-none sm:text-[28px]">
+          {value}
+        </p>
       </div>
       <span
         className={cn(
@@ -62,7 +66,10 @@ export function StatCard({
   );
 
   return href ? (
-    <Link href={href} className="rounded-xl">
+    <Link
+      href={href}
+      className="rounded-xl"
+    >
       {body}
     </Link>
   ) : (
