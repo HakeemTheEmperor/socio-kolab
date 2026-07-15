@@ -882,3 +882,311 @@ it. Invoking `updateTheme` over the server-action endpoint:
   unchanged;
 - reset (`null`) → the club returns to indigo and `settings.theme` is `undefined` in
   the database, not a copy of the default.
+
+## Event forms step 1 — Schema, validation module
+
+### `formSchema` is JSONB on `Event`, not a relation table
+Each event's form is an ordered array of field definitions stored in a single
+`Event.formSchema` JSONB column (defaulting to `[]`), not a `FormField` relation.
+The schema is always read and written as one atomic unit (saved together with the
+event, no partial saves), is never queried field-by-field, and field identity is
+carried by an immutable client-generated id rather than a row PK. A relation table
+would add a join and an ordering column for zero benefit at this scale (≤20 fields
+per event), and versioning-by-id makes field-rename/-delete migrations unnecessary.
+Responses live in `Attendance.formResponses` (also JSONB), keyed by that field id.
+
+### `Attendance` absorbs guests rather than a new `Guest` model
+A registration is one `Attendance` row whether it comes from a member or a guest.
+`membershipId` became nullable and `guestName`/`guestEmail`/`formResponses` were
+added alongside it. The member-or-guest XOR (exactly one identity, never both,
+never neither) cannot be expressed in Prisma/Postgres, so it is enforced in the
+submit server action (Phase 4). Deduplication rides on Postgres treating NULLs as
+distinct in unique indexes: `@@unique([eventId, membershipId])` keeps one row per
+member while allowing many guest rows, and `@@unique([eventId, guestEmail])` keeps
+one row per guest email (stored lowercased/trimmed) while allowing many member rows.
+The migration is additive — existing attendance rows keep their `membershipId` and
+default `formResponses` to `{}`.
+
+### One validation module feeds both the builder and the submitter
+`src/lib/event-forms.ts` owns `FormSchemaSchema` (validates the builder's output:
+id charset, 1–100-char labels, the five-type enum, selects require 1–20 non-empty
+options, ≤20 fields, unique ids) *and* `buildResponseValidator(formSchema)` (the
+per-event schema the public submit action runs). Colocating them is what stops the
+builder and submitter drifting: a field the builder can save is a field the
+submitter knows how to validate. The response validator is **strict** — unknown
+`custom_*` keys are rejected, select values outside the configured options are
+rejected (not stored), optional blanks are omitted, and the output is re-keyed by
+field id ready for `formResponses`. `parseFormSchema` degrades a malformed DB value
+to `[]` rather than throwing, so a hand-corrupted blob can't 500 the register page.
+
+### `z.coerce.number().refine(Number.isFinite)` over `.finite()`
+The plan sketched `z.coerce.number().finite()`, but Zod 4 reworked the number API;
+`.refine(Number.isFinite, …)` rejects `NaN`/`±Infinity` and is stable across the
+version, matching the repo's existing Zod-4 usage.
+
+### Existing RSVP list made null-safe now, full guest treatment deferred
+Making `membershipId` nullable surfaced two `a.membership.user.name` reads on the
+event detail RSVP list. They fall back to `guestName` now so the build stays green;
+the Guest badge and the full null-membership audit of the check-in/RSVP-count
+queries are Phase 6's job (EVENT-FORMS.md §5.1).
+
+## Event forms step 2 — Drag-and-drop form builder
+
+### The builder lives in the existing event dialog, not on `/new` + `/[id]/edit` pages
+EVENT-FORMS.md §2.2 assumed dedicated create/edit **pages** with a plain
+`<form action={serverAction}>`, `useActionState`, and a hidden `formSchema` input.
+Reality (built in the events phase) is a single **`EventFormDialog`** modal that
+holds each field in `useState` and calls the typed `createEvent`/`updateEvent`
+server actions with a plain object — no FormData, no hidden inputs. Rather than
+migrate event editing to pages (a large, regression-prone change well beyond this
+feature), the builder is embedded in that dialog: `FormBuilder` is a **controlled**
+component (`fields` + `onChange`) whose array the dialog owns and submits as one
+more field on the action's input object. The plan's essential guarantees are
+preserved — the form is saved atomically with the event, there is no separate save
+flow, and the server re-validates it with `FormSchemaSchema` — only the transport
+(object field vs. hidden input) differs. The dialog is widened to `sm:max-w-2xl`
+and made vertically scrollable to fit the builder.
+
+### `formSchema` rides `eventSchema`; `acceptingResponses` does not
+`FormSchemaSchema.default([])` was added to `eventSchema`, so the create/edit
+action validates and persists the form in the same parse as the rest of the event
+(§2.4). The intake flag is deliberately kept **out** of that schema: per §2.3 it
+toggles instantly through its own `setEventFormStatusAction` and must never be
+coupled to a form save (closing intake can't wait for, or be reverted by, an
+unsaved title edit). Ids are minted client-side with `nanoid` on add and never
+regenerated, so an edit round-trips existing fields by id.
+
+### `@dnd-kit` with a plain `<button>` drag handle and live announcements
+`@dnd-kit/core` + `/sortable` (+ `/utilities` for the transform helper), per §2.1.
+`PointerSensor` (4px activation distance, so a click on the handle isn't a drag) +
+`KeyboardSensor` with `sortableKeyboardCoordinates` give mouse and keyboard
+reordering; custom `Announcements` name the moved field for screen readers. The
+grip is a bare `<button>` (not the Base UI `Button`) so dnd-kit's `listeners`/
+`attributes` attach to the DOM node directly.
+
+### Field delete is an inline confirm, not a nested AlertDialog
+§2.2 specified a Base UI `AlertDialog` for the delete confirmation, but the project
+has no `alert-dialog` primitive and nesting a modal inside the already-open event
+dialog is fragile. Delete instead reveals an inline confirm strip on the row,
+carrying the same warning (responses are kept and shown as "(removed field)").
+Deleting only removes the field from the array — collected responses are untouched,
+per the no-hard-delete rule.
+
+### Live preview deferred to the phase that builds the renderer
+§2.2's optional "Preview form" disclosure is intentionally not built yet: it is
+meant to render the **same** `DynamicForm` the public page uses (the whole point is
+builder/renderer parity), and that component lands in Phase 3. Adding a throwaway
+preview now would defeat the parity guarantee; it will reuse `DynamicForm` once it
+exists.
+
+### The intake toggle appears in two places
+`IntakeToggle` (optimistic Base UI `Switch` → `setEventFormStatusAction`) sits both
+in the dialog's "Registration form" section (edit only — a not-yet-created event
+has nothing to toggle) and in the event detail header for quick access, exactly as
+§2.3 asks.
+
+## Event forms step 3 — Public registration page
+
+### The route is a `(public)` group under `[clubSlug]`, per the plan
+`app/[clubSlug]/(public)/events/[id]/register/page.tsx`. The club's own theme
+applies (the `[clubSlug]` layout injects it above every group and does no auth),
+while the `(public)` group keeps the page out of `(member)` and its
+`requireClubAccess` gate — no login, no membership required. `next build`
+confirms `/[clubSlug]/events/[id]/register` and `/[clubSlug]/events/[id]` (the
+exec detail, in `(member)`) coexist without a route-group collision: each URL has
+exactly one page. This differs cosmetically from the plan's literal path only in
+that the repo's existing `(public)` group is top-level; the club-scoped one is new.
+
+### `useActionState` here, matching the existing public register form
+Unlike the internal event dialog (imperative `useTransition` + typed-object
+actions), the public flow follows the club-join `RegisterForm` pattern the plan
+assumes: a plain `<form action={formAction}>` with `useActionState` and the action
+bound to `clubSlug` + `eventId` via `.bind(null, …)`. The client reads both from
+`useParams()` (repo convention) rather than accepting them as props.
+
+### Resolution ladder and viewer states are entirely server-side
+The page runs the §3.1 ladder — `getClubBySlug` (ACTIVE-or-404) → compound
+`{ id, clubId }` event fetch (404) → intake gate. A closed or past event renders a
+card with **no input elements at all** (not disabled inputs — none), so there is
+nothing to re-enable from a console. "Past" compares instants (`startsAt` already
+encodes Lagos wall-clock at write time), read through a `new Date()` const to
+satisfy the React-compiler purity rule. Viewer identity (§3.2) is derived in
+`resolveViewer`: an ACTIVE member of *this* club is locked to their account
+identity ("Registering as …"); anyone else signed in is a guest prefilled from
+their account; anonymous is empty. An existing registration (member row, or a guest
+row matching the signed-in email) swaps the form for the "You're registered ✓" card
+showing their answers, with schema-removed keys shown as "(removed field)". None of
+this is trusted client-side — Phase 4 re-derives the same table in the action.
+
+### The submit action is a fixed-signature placeholder until Phase 4
+`submitEventRegistrationAction` exists with its final `RegistrationState` contract
+and bound `clubSlug`/`eventId` signature, but a fail-closed placeholder body — the
+page renders and the form wires up, while the ordered validation + write flow lands
+in Phase 4 without the client changing. A live click-through of the states also
+needs the Phase 1 migration applied to the database first.
+
+### Sharing
+`CopyRegisterLink` (exec detail header) copies `origin + /{slug}/events/{id}/register`
+— the WhatsApp-blast link (§3.4). The optional builder live-preview stays deferred
+as non-essential polish; it can now reuse `DynamicForm` whenever it's wanted.
+
+## Event forms step 4 — Submit action end-to-end
+
+### The action resolves the club itself instead of `getClubBySlug`
+`getClubBySlug` 404s (throws) on a missing/unapproved slug — right for a page,
+wrong for an action that must return a state. `submitEventRegistrationAction`
+therefore does its own `club.findFirst({ slug, status: ACTIVE })` and returns a
+deliberately vague `GENERIC` message on any club/event miss: this action answers
+to forged and replayed POSTs, which should learn nothing about what exists. The
+event is fetched compound-scoped (`{ id, clubId }`), so a club A event id POSTed
+under club B's slug simply doesn't resolve.
+
+### The intake gate is step 3, before any answer is read
+`acceptingResponses === false` OR past (instant compare — `startsAt` already
+encodes Lagos wall-clock) returns the closed message before the form fields are
+touched. This is the real control against replayed/scripted POSTs; the register
+page's closed screen is cosmetic. The honeypot (`company`) is step 4 — a non-empty
+value returns `{ ok: true }` and writes nothing, so a bot sees success.
+
+### Viewer identity is re-derived server-side; a member's account wins
+Step 6 re-resolves the session → membership in THIS club. An ACTIVE member writes
+with `membershipId` and their submitted `name`/`email` are ignored entirely (the
+locked form doesn't even render them, but a forged POST can't override their
+identity). Everyone else is a guest, and only then is the core `name`/`email`
+validated with `coreRegistrantSchema` (lowercased/trimmed email). Response
+(`custom_*`) validation happens independently at step 5; the two error sets are
+merged so the registrant sees every problem at once. An unrecognised `custom_*`
+key has no input to attach to, so it becomes a form-level message, not a field
+error — and nothing is written.
+
+### Duplicates: check then rely on the constraints for the race
+Step 7 looks up the existing row (member by `eventId_membershipId`, guest by
+`eventId_guestEmail`) and returns the friendly duplicate message. The write is
+still wrapped in a `try/catch` for `P2002` returning the same message, because two
+concurrent submits pass the check together and only the unique index can arbitrate.
+The row is built as EITHER a member OR a guest payload — the XOR the schema can't
+express, enforced here by construction.
+
+### A required number must not coerce blank to 0 (bug found while wiring the action)
+`z.coerce.number()` turns `""` into `0`, which would let a **required** number
+field pass empty on a forged/JS-off POST. `fieldValidator` now runs
+`blankToUndefined` *before* coercion for numbers, so blank → `undefined` → `NaN` →
+fails `required` (and is omitted when optional). Covered by a new unit test.
+
+### Verified live against the local dev database
+The migration was applied (`migrate deploy`) and a throwaway script drove the exact
+validators + Prisma writes/constraints the action depends on, against a real
+seeded club — then deleted its own rows. All 15 checks green: schema columns
+round-trip; a valid submission stores `{fieldId: value}` with checkbox→true and a
+blank optional omitted; select-out-of-options, unknown `custom_*`, blank-required-
+number and blank-required-text are all rejected (nothing written); core email is
+normalised; duplicate guest email and duplicate member both raise `P2002` (one row
+each); a second distinct guest is allowed (NULLs distinct); guest rows carry
+`guestEmail`/null `membershipId` and member rows the reverse; the intake flag
+round-trips. The action's own orchestration (auth/`revalidatePath`, which need
+Next's request scope) is covered by `tsc` + `next build` + review, since it can't
+run outside the server.
+
+## Event forms step 5 — Exec responses view + CSV export
+
+### Responses is a stacked exec card, not a literal "tab"
+§5.1 says "add a Responses tab alongside the existing RSVP/check-in views", but the
+event detail page has never used tabs — RSVPs and Check-in are stacked `Card`s, and
+RSVPs is member-visible while Check-in is exec-only, so a shared tab strip would mix
+audiences. Responses is therefore a third **exec-only card** (between RSVPs and
+Check-in), consistent with the page. Its header carries the count + member/guest
+split, the copy-link, and Export CSV; the intake toggle already lives in the page
+header (Phase 2), so it isn't duplicated here.
+
+### "Responses" = every Attendance row, because that IS the registration record
+There is no stored flag distinguishing a public-form registration from an internal
+RSVP or a check-in — they are all `Attendance` (§1.2, "the single registration
+record"). Rather than guess intent from empty `formResponses`, the table lists every
+attendance row, with custom columns showing "—" where a member never answered them.
+Guests (no membership) are always form registrations; members may be either. The
+member/guest split counts `membershipId` null vs. set.
+
+### One column-derivation helper for the table and the CSV
+`deriveResponseColumns(formSchema, responsesList)` (`lib/event-responses.ts`) returns
+the columns — current-schema fields in order, then each orphaned response key once as
+"(removed field)" — and is called by both the on-screen table and the CSV route, so
+their headers can't drift. Cell formatting differs by medium on purpose:
+`responseCellText` renders checkbox as Yes/— (blank → —) for the table;
+`responseCellCsv` renders Yes/No (blank → empty) so a spreadsheet gets data, not an
+em-dash. Both live in the same module and are unit-tested.
+
+### CSV is a route handler, not a server action
+`events/[id]/responses/route.ts` (`GET`) so the browser downloads natively via
+`Content-Disposition`. Route handlers bypass the `(member)` layout guard, so it
+re-runs the checks itself: `requireClubAccess` (redirects a logged-out or non-member
+caller) + `can(event:manage)` (403 for a non-exec) + a compound `{ id, clubId }`
+fetch (404 for another club's event id). `csvCell` applies the §5.2 formula-injection
+guard — a value starting with `=`, `+`, `-`, or `@` is prefixed with `'` — then
+RFC-4180 quoting; a `String.fromCharCode(0xFEFF)` BOM makes Excel read it as UTF-8;
+timestamps are Africa/Lagos; the filename is `slugify(title)-responses.csv`.
+
+### Guests join the check-in list; a guest is checked in by Attendance id
+§5.1 wants guests in check-in too. `CheckInMember` became `CheckInEntry` with a
+`kind` ("member" | "guest") and a `targetId` (membershipId or Attendance id), and the
+list renders a "Guest" badge. Members keep the `toggleCheckIn` upsert-by-membership
+path; guests use a new `toggleGuestCheckIn` that `updateMany`s the row filtered by
+`{ id, eventId, membershipId: null }` — the null filter guarantees it can never
+touch a member row (verified live: the same filter against a member id matches zero
+rows), and a guest with no registration simply has no row to check in.
+
+### Null-membership audit
+The RSVP-count queries were already null-safe (they filter on `rsvp`/compare
+`membershipId` to a real id, so guest NULLs never match); the detail RSVP list was
+fixed in step 1; the check-in map is now built only from member rows and guests are
+added explicitly. No query dereferences a possibly-null membership.
+
+### Verified live against the local dev database
+A throwaway script created a member and a guest registration (one value with a comma,
+a nickname of `=SUM(9)`, and an orphaned `oldfield` key) on a real club, then built
+the rows + CSV through the exact route code path and asserted: columns end in
+"(removed field)"; guest row uses guestName/guestEmail and member row the account's;
+the comma value is quoted, the checkbox exports Yes/No, and `=SUM(9)` exports inert
+as `'=SUM(9)`; the filename slugifies to `frosh-week-mixer-responses.csv`; and guest
+check-in updates exactly one guest row while the member-scoped filter touches none.
+9/9 green, rows cleaned up after.
+
+## Event forms step 6 — Docs + acceptance click-through
+
+### The public event-register route needed a proxy exemption
+The edge proxy (`auth.config.ts`) treats every matched route as auth-required
+except an explicit allowlist, which only covered `/{slug}/register`. The new
+`/{slug}/events/{id}/register` was therefore 307-redirecting anonymous visitors to
+`/login` — the whole point of the feature is that it's public. Added a second regex
+(`^/[^/]+/events/[^/]+/register/?$`) alongside the club-join one. This was a
+Phase-3 miss surfaced only by the live click-through (the page and action were
+correct; the proxy in front of them wasn't). Membership/club scoping is still
+decided server-side per request, as for every route — the proxy only waves the
+page through.
+
+### README
+Added an "Event registration forms" section (builder, intake toggle, the three
+public viewer states, the server-side submit boundary, and exec responses + CSV),
+a URL-table row for `/{clubSlug}/events/{id}/register`, and the two new `lib/`
+modules + route locations in the project-structure tree.
+
+### Acceptance checklist — verified
+Driven against a running dev server on a seeded database (public pages over HTTP)
+plus the Phase-4/5 live DB scripts and `next build`:
+
+- **Closed intake** → the register page returns a card with **zero** `<input>`,
+  `<select>`, or `<textarea>` elements and the "no longer accepting" copy; the
+  open form renders name, email, the `custom_*` fields, and the honeypot. A
+  replayed POST to a closed form is rejected server-side (Phase-4 intake gate).
+- **Cross-club** → club A's event id under club B's slug is a **404**; so are a
+  missing event id and an unknown slug (one indistinguishable 404).
+- **Duplicate** guest email / repeat member → friendly error, one row (`P2002`).
+- **Select-out-of-options / unknown `custom_*`** → rejected, nothing persisted.
+- **Removed field** → prior answers retained under "(removed field)" in the table
+  and CSV.
+- **CSV** → `=1+1`-style values export inert (`'` prefix); UTF-8 BOM + Lagos
+  timestamps; slugified filename.
+- **`next build`** → passes with zero TypeScript errors.
+
+The two interactive-only items — keyboard-only drag-reorder of fields, and opening
+the CSV in Excel — follow the documented dnd-kit keyboard-sensor path and the
+BOM/escaping rules respectively, and want a final human eyeball in the browser.

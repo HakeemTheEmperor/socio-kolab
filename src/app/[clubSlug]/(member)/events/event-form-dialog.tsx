@@ -17,7 +17,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { FormField } from "@/lib/event-forms";
 import { createEvent, updateEvent } from "./actions";
+import { FormBuilder } from "./form-builder";
+import { IntakeToggle } from "./intake-toggle";
 
 type EventValues = {
   id: string;
@@ -26,6 +29,8 @@ type EventValues = {
   location: string | null;
   startsAtLocal: string;
   endsAtLocal: string;
+  formSchema: FormField[];
+  acceptingResponses: boolean;
 };
 
 export function EventFormDialog({ event }: { event?: EventValues }) {
@@ -40,10 +45,11 @@ export function EventFormDialog({ event }: { event?: EventValues }) {
   const [location, setLocation] = useState(event?.location ?? "");
   const [startsAt, setStartsAt] = useState(event?.startsAtLocal ?? "");
   const [endsAt, setEndsAt] = useState(event?.endsAtLocal ?? "");
+  const [formSchema, setFormSchema] = useState<FormField[]>(event?.formSchema ?? []);
 
   function submit() {
     startTransition(async () => {
-      const input = { title, description, location, startsAt, endsAt };
+      const input = { title, description, location, startsAt, endsAt, formSchema };
       const result = isEdit
         ? await updateEvent(clubSlug, event!.id, input)
         : await createEvent(clubSlug, input);
@@ -64,7 +70,7 @@ export function EventFormDialog({ event }: { event?: EventValues }) {
       >
         {isEdit ? "Edit" : "Create event"}
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit event" : "Create event"}</DialogTitle>
           <DialogDescription>
@@ -114,6 +120,26 @@ export function EventFormDialog({ event }: { event?: EventValues }) {
             />
           </div>
         </div>
+
+        <section className="space-y-3 border-t border-border pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-medium">Registration form</h3>
+              <p className="text-[13px] text-muted-foreground">
+                Questions asked when someone registers via the public link.
+              </p>
+            </div>
+            {/* Intake toggle applies instantly, so it only makes sense once the
+                event exists (EVENT-FORMS.md §2.3). */}
+            {isEdit ? (
+              <IntakeToggle
+                eventId={event!.id}
+                accepting={event!.acceptingResponses}
+              />
+            ) : null}
+          </div>
+          <FormBuilder fields={formSchema} onChange={setFormSchema} />
+        </section>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>

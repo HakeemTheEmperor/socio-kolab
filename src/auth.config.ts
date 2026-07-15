@@ -34,6 +34,13 @@ export const authConfig = {
         return true;
       }
 
+      // /{clubSlug}/events/{id}/register is the public event-registration form —
+      // no login, no membership (EVENT-FORMS.md §3). The submit action and the
+      // page both re-scope by slug + id server-side.
+      if (/^\/[^/]+\/events\/[^/]+\/register\/?$/.test(pathname)) {
+        return true;
+      }
+
       // Every other matched route requires a session. Whether that session may
       // see the club it asked for is decided server-side, per club, by
       // `requireClubAccess` — the proxy only knows that *someone* is signed in.

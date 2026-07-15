@@ -133,6 +133,13 @@ model Event {
   endsAt      DateTime?
   attendance  Attendance[]
 
+  // Custom registration form (EVENT-FORMS.md §1.1). `formSchema` is an ordered
+  // array of field definitions keyed by an immutable client-generated id; see
+  // src/lib/event-forms.ts for its shape and validation. Stored as JSONB — one
+  // atomic unit, never queried field-by-field (rationale in DECISIONS.md).
+  formSchema         Json    @default("[]")
+  acceptingResponses Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -140,11 +147,17 @@ model Event {
 }
 
 model Attendance {
-  id            String      @id @default(cuid())
-  event         Event       @relation(fields: [eventId], references: [id])
+  id            String       @id @default(cuid())
+  event         Event        @relation(fields: [eventId], references: [id])
   eventId       String
-  membership    Membership  @relation(fields: [membershipId], references: [id])
-  membershipId  String
+  // Optional now: a registration is EITHER a member (membershipId) OR a guest
+  // (guestName + guestEmail), never both, never neither. Prisma can't express
+  // that XOR, so it is enforced in the submit server action (EVENT-FORMS.md §1.2).
+  membership    Membership?  @relation(fields: [membershipId], references: [id])
+  membershipId  String?
+  guestName     String?
+  guestEmail    String? // stored lowercased/trimmed
+  formResponses Json         @default("{}") // { [fieldId]: string | number | boolean }
   rsvp          RsvpStatus?
   checkedInAt   DateTime?
   checkedInById String? // membership id of exec who checked them in
@@ -152,5 +165,8 @@ model Attendance {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Postgres treats NULLs as distinct, so these dedup members and guests
+  // independently: one member row per event, one guest row per event+email.
   @@unique([eventId, membershipId])
+  @@unique([eventId, guestEmail])
 }

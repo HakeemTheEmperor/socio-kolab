@@ -21,6 +21,7 @@ and deviations.
 | `/clubs/new` | Signed in. Request a new club. |
 | `/admin` | Platform admins only (404 for everyone else). Approve, reject, suspend clubs. |
 | `/{clubSlug}/register` | Public. Apply to that club. |
+| `/{clubSlug}/events/{id}/register` | Public. Register for that event (see below). |
 | `/{clubSlug}/dashboard`, `/members`, `/dues`, `/events`, `/settings`, `/profile` | Members of that club, with an ACTIVE membership. |
 
 Every request re-resolves the club from the slug and verifies the caller's
@@ -59,6 +60,51 @@ president at `/{clubSlug}/settings` ("Accept new membership applications"):
 
 Exec manual-add and the CSV importer ignore the toggle by design — it gates
 self-service applications, not the club's own roster management.
+
+## Event registration forms
+
+Any event can carry a **custom registration form** that anyone — members,
+signed-in non-members, and anonymous visitors — fills in through a public link
+clubs share (e.g. on WhatsApp). Members and guests land in the same attendance
+list, and execs get a responses table and a CSV export.
+
+**Building the form (exec).** In the create/edit event dialog, a drag-and-drop
+"Registration form" builder adds up to 20 custom fields of five types — short
+text, paragraph, number, checkbox, dropdown. Fields reorder by mouse or keyboard,
+rename inline, and toggle required; the schema saves atomically with the event.
+Name and email are always collected and can't be removed. Each field keeps an
+immutable id, so responses stay readable when a field is later renamed or deleted
+(a deleted field's answers are retained and shown as "(removed field)").
+
+**Intake toggle.** An "Accepting responses" switch (in the builder and the event
+header) opens or closes the form instantly, without touching the schema or any
+collected responses.
+
+**Registering (public).** `/{clubSlug}/events/{id}/register` needs no login and
+renders in the club's theme:
+
+- an **ACTIVE member** of the club has their name and email locked to their
+  account;
+- anyone else **signed in** is prefilled from their account as a guest;
+- an **anonymous** visitor fills everything in.
+
+If intake is closed, or the event is in the past, the page shows a "no longer
+accepting responses" card with no form at all. Already-registered visitors see
+their submitted answers instead of the form.
+
+**The submit action is the boundary.** Every submission re-resolves the club and
+event server-side, re-checks intake (a replayed or hand-built POST to a closed
+form is rejected), validates answers against *that event's* schema (an unknown
+field or an out-of-range dropdown value is refused, never stored), re-derives
+whether the registrant is a member or a guest (a member's identity always wins),
+and dedupes — one registration per member and one per guest email, backstopped by
+database unique constraints.
+
+**Reporting (exec).** The event page gains a **Responses** view: a count with the
+member/guest split, a table (one column per field, plus any "(removed field)"
+columns), and a **CSV export**. The CSV opens cleanly in Excel (UTF-8, Africa/Lagos
+timestamps) and is formula-injection–safe — a value like `=1+1` exports inert.
+Guests also appear in the check-in list with a "Guest" badge.
 
 ## Tech stack
 
@@ -230,8 +276,12 @@ src/
     admin/             # platform admin (club lifecycle only)
     [clubSlug]/
       register/        # public, club-scoped application
+      (public)/
+        events/[id]/register/   # public event registration form + submit action
       (member)/        # ACTIVE membership required (gated layout + nav shell)
-        dashboard/ members/ dues/ events/ settings/ profile/
+        dashboard/ members/ dues/ settings/ profile/
+        events/        # list, detail (RSVP / responses / check-in), form builder
+          [id]/responses/       # CSV export route handler
   lib/
     prisma.ts          # Prisma client (pg driver adapter)
     club-context.ts    # getClubBySlug / requireClubAccess / cross-club guards
@@ -240,6 +290,8 @@ src/
     slug.ts            # validateSlug / slugify (+ reserved slugs)
     permissions.ts     # can(membership, action) — SPEC §5 matrix
     format.ts          # currency (₦) + Africa/Lagos date formatting
+    event-forms.ts     # form schema + response validation (builder + submit)
+    event-responses.ts # response columns + CSV serialisation
     validations/       # Zod schemas
   components/ui/       # shadcn/ui components
 ```
