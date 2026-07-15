@@ -7,6 +7,7 @@ import {
   LayoutGrid,
   LogOut,
   KeyRound,
+  Plus,
   UserRound,
 } from "lucide-react";
 
@@ -53,22 +54,10 @@ function ClubSwitcher({
   otherClubs,
   onNavigate,
 }: Pick<SidebarProps, "club" | "otherClubs" | "onNavigate">) {
-  // With nothing to switch to, the block is just a link to /clubs — a dropdown
-  // holding a single item would be a menu that says nothing (§B2).
-  if (otherClubs.length === 0) {
-    return (
-      <Link
-        href="/clubs"
-        onClick={onNavigate}
-        title="All clubs"
-        className="flex items-center gap-2.5 rounded-lg p-2 hover:bg-surface-hover"
-      >
-        <ClubMark club={club} />
-        <span className="truncate text-sm font-semibold">{club.name}</span>
-      </Link>
-    );
-  }
-
+  // Always a dropdown: even with nothing to switch to, it carries "Start a new
+  // club" and "All clubs", so it is no longer a menu that says nothing (§B2).
+  // This is the only in-shell entry to /clubs/new — the /clubs page's link is
+  // unreachable for a single-club user, who gets auto-forwarded past it.
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -88,7 +77,7 @@ function ClubSwitcher({
           strokeWidth={1.75}
           className="size-4 shrink-0 text-muted-foreground"
         />
-        <span className="sr-only">Switch club</span>
+        <span className="sr-only">Club menu</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
@@ -98,27 +87,42 @@ function ClubSwitcher({
             and throws outright without a surrounding Group. It also earns its keep
             here — the group is what ties the label to the clubs it names, so a
             screen reader announces them together. */}
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Switch club</DropdownMenuLabel>
-          {otherClubs.map((other) => (
-            <DropdownMenuItem
-              key={other.slug}
-              render={
-                <Link
-                  href={`/${other.slug}/dashboard`}
-                  onClick={onNavigate}
-                />
-              }
-            >
-              <ClubMark
-                club={other}
-                className="size-5 rounded text-[10px]"
-              />
-              <span className="truncate">{other.name}</span>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
+        {otherClubs.length > 0 ? (
+          <>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Switch club</DropdownMenuLabel>
+              {otherClubs.map((other) => (
+                <DropdownMenuItem
+                  key={other.slug}
+                  render={
+                    <Link
+                      href={`/${other.slug}/dashboard`}
+                      onClick={onNavigate}
+                    />
+                  }
+                >
+                  <ClubMark
+                    club={other}
+                    className="size-5 rounded text-[10px]"
+                  />
+                  <span className="truncate">{other.name}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
+        <DropdownMenuItem
+          render={
+            <Link
+              href="/clubs/new"
+              onClick={onNavigate}
+            />
+          }
+        >
+          <Plus strokeWidth={1.75} />
+          Start a new club
+        </DropdownMenuItem>
         <DropdownMenuItem
           render={
             <Link

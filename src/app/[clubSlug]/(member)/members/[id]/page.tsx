@@ -87,8 +87,8 @@ export default async function MemberDetailPage({
 
       {/* Two columns on desktop: who they are on the left, what they've done on
           the right. Stacked on mobile (§C2). */}
-      <div className="grid gap-6 lg:grid-cols-[320px_1fr] border-2 border-red-500">
-        <div className="space-y-6">
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+        <div className="min-w-0 space-y-6">
           <Card>
             <CardContent className="space-y-4 p-6">
               <div className="flex items-center gap-3">
@@ -166,7 +166,7 @@ export default async function MemberDetailPage({
           ) : null}
         </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           {canViewFull ? (
             <>
               <Card>
@@ -180,7 +180,7 @@ export default async function MemberDetailPage({
                       message="No dues recorded yet."
                     />
                   ) : (
-                    <div className="overflow-x-scroll">
+                    <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -223,7 +223,7 @@ export default async function MemberDetailPage({
                       message="No event activity yet."
                     />
                   ) : (
-                    <div className="overflow-x-scroll">
+                    <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>

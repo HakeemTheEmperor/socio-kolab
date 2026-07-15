@@ -1190,3 +1190,20 @@ plus the Phase-4/5 live DB scripts and `next build`:
 The two interactive-only items — keyboard-only drag-reorder of fields, and opening
 the CSV in Excel — follow the documented dnd-kit keyboard-sensor path and the
 BOM/escaping rules respectively, and want a final human eyeball in the browser.
+
+## The club switcher is always a dropdown now (reachable "Start a new club")
+
+Multi-club step 4 made the sidebar club block a plain link to `/clubs` for a
+single-club user, on the grounds that "a dropdown holding a single item would be a
+menu that says nothing." That left a gap: the only link to `/clubs/new` lived on
+the `/clubs` page, which a user with exactly one live club and nothing pending is
+**auto-forwarded past** (`clubs/page.tsx` redirects straight to their dashboard).
+So the users most likely to want a second club had no in-app way to reach the
+create-club flow (only typing `/clubs/new` by hand).
+
+`ClubSwitcher` is therefore always a dropdown now. It carries "Start a new club"
+(→ `/clubs/new`) and "All clubs" (→ `/clubs`), plus the "Switch club" group when
+the user has other memberships — so even the single-club menu says something
+useful, which retires the original objection. Creating additional clubs was always
+allowed server-side (`requestClub` has no per-user cap); this only adds the missing
+front door.

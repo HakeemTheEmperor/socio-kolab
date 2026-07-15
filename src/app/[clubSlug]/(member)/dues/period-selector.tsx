@@ -32,10 +32,12 @@ export function PeriodSelector({
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-sm text-muted-foreground">Period</span>
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="hidden text-sm text-muted-foreground sm:inline">
+        Period
+      </span>
       <Select value={selected} onValueChange={(v) => v && onChange(v)}>
-        <SelectTrigger className="w-[160px]">
+        <SelectTrigger className="w-32.5 sm:w-40">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
