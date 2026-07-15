@@ -19,6 +19,7 @@ import {
 import { EventFormDialog } from "../event-form-dialog";
 import { DeleteEventButton } from "../delete-event-button";
 import { IntakeToggle } from "../intake-toggle";
+import { CopyRegisterLink } from "../copy-register-link";
 import { RsvpButtons } from "../rsvp-buttons";
 import { CheckInList, type CheckInMember } from "./check-in-list";
 
@@ -112,7 +113,8 @@ export default async function EventDetailPage({
               eventId={event.id}
               accepting={event.acceptingResponses}
             />
-            <div className="flex gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              <CopyRegisterLink eventId={event.id} />
               <EventFormDialog
                 event={{
                   id: event.id,

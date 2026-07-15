@@ -984,3 +984,48 @@ exists.
 in the dialog's "Registration form" section (edit only — a not-yet-created event
 has nothing to toggle) and in the event detail header for quick access, exactly as
 §2.3 asks.
+
+## Event forms step 3 — Public registration page
+
+### The route is a `(public)` group under `[clubSlug]`, per the plan
+`app/[clubSlug]/(public)/events/[id]/register/page.tsx`. The club's own theme
+applies (the `[clubSlug]` layout injects it above every group and does no auth),
+while the `(public)` group keeps the page out of `(member)` and its
+`requireClubAccess` gate — no login, no membership required. `next build`
+confirms `/[clubSlug]/events/[id]/register` and `/[clubSlug]/events/[id]` (the
+exec detail, in `(member)`) coexist without a route-group collision: each URL has
+exactly one page. This differs cosmetically from the plan's literal path only in
+that the repo's existing `(public)` group is top-level; the club-scoped one is new.
+
+### `useActionState` here, matching the existing public register form
+Unlike the internal event dialog (imperative `useTransition` + typed-object
+actions), the public flow follows the club-join `RegisterForm` pattern the plan
+assumes: a plain `<form action={formAction}>` with `useActionState` and the action
+bound to `clubSlug` + `eventId` via `.bind(null, …)`. The client reads both from
+`useParams()` (repo convention) rather than accepting them as props.
+
+### Resolution ladder and viewer states are entirely server-side
+The page runs the §3.1 ladder — `getClubBySlug` (ACTIVE-or-404) → compound
+`{ id, clubId }` event fetch (404) → intake gate. A closed or past event renders a
+card with **no input elements at all** (not disabled inputs — none), so there is
+nothing to re-enable from a console. "Past" compares instants (`startsAt` already
+encodes Lagos wall-clock at write time), read through a `new Date()` const to
+satisfy the React-compiler purity rule. Viewer identity (§3.2) is derived in
+`resolveViewer`: an ACTIVE member of *this* club is locked to their account
+identity ("Registering as …"); anyone else signed in is a guest prefilled from
+their account; anonymous is empty. An existing registration (member row, or a guest
+row matching the signed-in email) swaps the form for the "You're registered ✓" card
+showing their answers, with schema-removed keys shown as "(removed field)". None of
+this is trusted client-side — Phase 4 re-derives the same table in the action.
+
+### The submit action is a fixed-signature placeholder until Phase 4
+`submitEventRegistrationAction` exists with its final `RegistrationState` contract
+and bound `clubSlug`/`eventId` signature, but a fail-closed placeholder body — the
+page renders and the form wires up, while the ordered validation + write flow lands
+in Phase 4 without the client changing. A live click-through of the states also
+needs the Phase 1 migration applied to the database first.
+
+### Sharing
+`CopyRegisterLink` (exec detail header) copies `origin + /{slug}/events/{id}/register`
+— the WhatsApp-blast link (§3.4). The optional builder live-preview stays deferred
+as non-essential polish; it can now reuse `DynamicForm` whenever it's wanted.
