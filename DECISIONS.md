@@ -882,3 +882,50 @@ it. Invoking `updateTheme` over the server-action endpoint:
   unchanged;
 - reset (`null`) → the club returns to indigo and `settings.theme` is `undefined` in
   the database, not a copy of the default.
+
+## Event forms step 1 — Schema, validation module
+
+### `formSchema` is JSONB on `Event`, not a relation table
+Each event's form is an ordered array of field definitions stored in a single
+`Event.formSchema` JSONB column (defaulting to `[]`), not a `FormField` relation.
+The schema is always read and written as one atomic unit (saved together with the
+event, no partial saves), is never queried field-by-field, and field identity is
+carried by an immutable client-generated id rather than a row PK. A relation table
+would add a join and an ordering column for zero benefit at this scale (≤20 fields
+per event), and versioning-by-id makes field-rename/-delete migrations unnecessary.
+Responses live in `Attendance.formResponses` (also JSONB), keyed by that field id.
+
+### `Attendance` absorbs guests rather than a new `Guest` model
+A registration is one `Attendance` row whether it comes from a member or a guest.
+`membershipId` became nullable and `guestName`/`guestEmail`/`formResponses` were
+added alongside it. The member-or-guest XOR (exactly one identity, never both,
+never neither) cannot be expressed in Prisma/Postgres, so it is enforced in the
+submit server action (Phase 4). Deduplication rides on Postgres treating NULLs as
+distinct in unique indexes: `@@unique([eventId, membershipId])` keeps one row per
+member while allowing many guest rows, and `@@unique([eventId, guestEmail])` keeps
+one row per guest email (stored lowercased/trimmed) while allowing many member rows.
+The migration is additive — existing attendance rows keep their `membershipId` and
+default `formResponses` to `{}`.
+
+### One validation module feeds both the builder and the submitter
+`src/lib/event-forms.ts` owns `FormSchemaSchema` (validates the builder's output:
+id charset, 1–100-char labels, the five-type enum, selects require 1–20 non-empty
+options, ≤20 fields, unique ids) *and* `buildResponseValidator(formSchema)` (the
+per-event schema the public submit action runs). Colocating them is what stops the
+builder and submitter drifting: a field the builder can save is a field the
+submitter knows how to validate. The response validator is **strict** — unknown
+`custom_*` keys are rejected, select values outside the configured options are
+rejected (not stored), optional blanks are omitted, and the output is re-keyed by
+field id ready for `formResponses`. `parseFormSchema` degrades a malformed DB value
+to `[]` rather than throwing, so a hand-corrupted blob can't 500 the register page.
+
+### `z.coerce.number().refine(Number.isFinite)` over `.finite()`
+The plan sketched `z.coerce.number().finite()`, but Zod 4 reworked the number API;
+`.refine(Number.isFinite, …)` rejects `NaN`/`±Infinity` and is stable across the
+version, matching the repo's existing Zod-4 usage.
+
+### Existing RSVP list made null-safe now, full guest treatment deferred
+Making `membershipId` nullable surfaced two `a.membership.user.name` reads on the
+event detail RSVP list. They fall back to `guestName` now so the build stays green;
+the Guest badge and the full null-membership audit of the check-in/RSVP-count
+queries are Phase 6's job (EVENT-FORMS.md §5.1).

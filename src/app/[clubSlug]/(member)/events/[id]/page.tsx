@@ -156,20 +156,21 @@ export default async function EventDetailPage({
                   <p className="text-[13px] text-muted-foreground">Nobody yet.</p>
                 ) : (
                   <ul className="space-y-2">
-                    {list.map((a) => (
-                      <li key={a.id} className="flex items-center gap-2">
-                        <Avatar
-                          name={a.membership.user.name}
-                          className="size-7 text-[10px]"
-                        />
-                        <span className="min-w-0 flex-1 truncate text-sm">
-                          {a.membership.user.name}
-                        </span>
-                        {a.checkedInAt ? (
-                          <Badge variant="success">In</Badge>
-                        ) : null}
-                      </li>
-                    ))}
+                    {list.map((a) => {
+                      // Guests (no membership) register via the public form and
+                      // still RSVP; fall back to their name. Full guest treatment
+                      // lands in the Responses/check-in work (EVENT-FORMS.md §5).
+                      const name = a.membership?.user.name ?? a.guestName ?? "Guest";
+                      return (
+                        <li key={a.id} className="flex items-center gap-2">
+                          <Avatar name={name} className="size-7 text-[10px]" />
+                          <span className="min-w-0 flex-1 truncate text-sm">{name}</span>
+                          {a.checkedInAt ? (
+                            <Badge variant="success">In</Badge>
+                          ) : null}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
