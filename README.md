@@ -3,6 +3,8 @@
 A **multi-club** web portal for student clubs — member management, dues tracking
 (record-keeping only, no payment processing), and events with RSVP + attendance.
 
+> **Live demo:** [https://sk.toluwalase.me](https://sk.toluwalase.me)
+
 Each club lives under its own slug (`/adrian-tech/dashboard`). Accounts are
 platform-level: one sign-in reaches every club you belong to, and one person can
 be a member of several clubs. Anyone can request a new club; a platform admin
