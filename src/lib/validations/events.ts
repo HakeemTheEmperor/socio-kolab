@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { FormSchemaSchema } from "@/lib/event-forms";
+
 const optionalText = (max: number) =>
   z
     .string()
@@ -33,6 +35,10 @@ export const eventSchema = z
       (v) => (v === "" || v == null ? null : toLagosDate(v)),
       z.coerce.date().nullable(),
     ),
+    // The custom registration form is saved atomically with the event — no
+    // separate save flow. `acceptingResponses` is deliberately NOT here: it is
+    // toggled instantly through its own action (EVENT-FORMS.md §2.3, §2.4).
+    formSchema: FormSchemaSchema.default([]),
   })
   .refine((d) => !d.endsAt || d.endsAt >= d.startsAt, {
     message: "End must be after the start.",

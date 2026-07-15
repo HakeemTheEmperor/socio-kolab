@@ -34,6 +34,7 @@ export async function createEvent(
       location: parsed.data.location,
       startsAt: parsed.data.startsAt,
       endsAt: parsed.data.endsAt,
+      formSchema: parsed.data.formSchema,
     },
   });
   revalidatePath(`/${clubSlug}/events`);
@@ -64,10 +65,37 @@ export async function updateEvent(
       location: parsed.data.location,
       startsAt: parsed.data.startsAt,
       endsAt: parsed.data.endsAt,
+      formSchema: parsed.data.formSchema,
     },
   });
   revalidatePath(`/${clubSlug}/events`);
   revalidatePath(`/${clubSlug}/events/${eventId}`);
+  return { ok: true };
+}
+
+/**
+ * Open or close a form's intake (EVENT-FORMS.md §2.3). Deliberately separate
+ * from `updateEvent`: toggling is instant and never touches `formSchema` or any
+ * collected responses. This is also the server-side boundary the public submit
+ * action re-checks — the register-page banner is only cosmetic.
+ */
+export async function setEventFormStatusAction(
+  clubSlug: string,
+  eventId: string,
+  accepting: boolean,
+): Promise<ActionResult> {
+  const { club, membership: me } = await requireClubAccess(clubSlug);
+  if (!can(me, "event:manage")) return { ok: false, error: "Not authorized." };
+
+  const event = await findEventInClub(club.id, eventId);
+  if (!event) return { ok: false, error: "Event not found." };
+
+  await prisma.event.update({
+    where: { id: eventId, clubId: club.id },
+    data: { acceptingResponses: accepting },
+  });
+  revalidatePath(`/${clubSlug}/events/${eventId}`);
+  revalidatePath(`/${clubSlug}/events/${eventId}/register`);
   return { ok: true };
 }
 

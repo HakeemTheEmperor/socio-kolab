@@ -929,3 +929,58 @@ Making `membershipId` nullable surfaced two `a.membership.user.name` reads on th
 event detail RSVP list. They fall back to `guestName` now so the build stays green;
 the Guest badge and the full null-membership audit of the check-in/RSVP-count
 queries are Phase 6's job (EVENT-FORMS.md §5.1).
+
+## Event forms step 2 — Drag-and-drop form builder
+
+### The builder lives in the existing event dialog, not on `/new` + `/[id]/edit` pages
+EVENT-FORMS.md §2.2 assumed dedicated create/edit **pages** with a plain
+`<form action={serverAction}>`, `useActionState`, and a hidden `formSchema` input.
+Reality (built in the events phase) is a single **`EventFormDialog`** modal that
+holds each field in `useState` and calls the typed `createEvent`/`updateEvent`
+server actions with a plain object — no FormData, no hidden inputs. Rather than
+migrate event editing to pages (a large, regression-prone change well beyond this
+feature), the builder is embedded in that dialog: `FormBuilder` is a **controlled**
+component (`fields` + `onChange`) whose array the dialog owns and submits as one
+more field on the action's input object. The plan's essential guarantees are
+preserved — the form is saved atomically with the event, there is no separate save
+flow, and the server re-validates it with `FormSchemaSchema` — only the transport
+(object field vs. hidden input) differs. The dialog is widened to `sm:max-w-2xl`
+and made vertically scrollable to fit the builder.
+
+### `formSchema` rides `eventSchema`; `acceptingResponses` does not
+`FormSchemaSchema.default([])` was added to `eventSchema`, so the create/edit
+action validates and persists the form in the same parse as the rest of the event
+(§2.4). The intake flag is deliberately kept **out** of that schema: per §2.3 it
+toggles instantly through its own `setEventFormStatusAction` and must never be
+coupled to a form save (closing intake can't wait for, or be reverted by, an
+unsaved title edit). Ids are minted client-side with `nanoid` on add and never
+regenerated, so an edit round-trips existing fields by id.
+
+### `@dnd-kit` with a plain `<button>` drag handle and live announcements
+`@dnd-kit/core` + `/sortable` (+ `/utilities` for the transform helper), per §2.1.
+`PointerSensor` (4px activation distance, so a click on the handle isn't a drag) +
+`KeyboardSensor` with `sortableKeyboardCoordinates` give mouse and keyboard
+reordering; custom `Announcements` name the moved field for screen readers. The
+grip is a bare `<button>` (not the Base UI `Button`) so dnd-kit's `listeners`/
+`attributes` attach to the DOM node directly.
+
+### Field delete is an inline confirm, not a nested AlertDialog
+§2.2 specified a Base UI `AlertDialog` for the delete confirmation, but the project
+has no `alert-dialog` primitive and nesting a modal inside the already-open event
+dialog is fragile. Delete instead reveals an inline confirm strip on the row,
+carrying the same warning (responses are kept and shown as "(removed field)").
+Deleting only removes the field from the array — collected responses are untouched,
+per the no-hard-delete rule.
+
+### Live preview deferred to the phase that builds the renderer
+§2.2's optional "Preview form" disclosure is intentionally not built yet: it is
+meant to render the **same** `DynamicForm` the public page uses (the whole point is
+builder/renderer parity), and that component lands in Phase 3. Adding a throwaway
+preview now would defeat the parity guarantee; it will reuse `DynamicForm` once it
+exists.
+
+### The intake toggle appears in two places
+`IntakeToggle` (optimistic Base UI `Switch` → `setEventFormStatusAction`) sits both
+in the dialog's "Registration form" section (edit only — a not-yet-created event
+has nothing to toggle) and in the event detail header for quick access, exactly as
+§2.3 asks.

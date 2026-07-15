@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireClubAccess } from "@/lib/club-context";
 import { formatDateTime, toDateTimeLocal } from "@/lib/format";
+import { parseFormSchema } from "@/lib/event-forms";
 import { ArrowLeft } from "lucide-react";
 import { Avatar, DateBlock } from "@/components/date-block";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/card";
 import { EventFormDialog } from "../event-form-dialog";
 import { DeleteEventButton } from "../delete-event-button";
+import { IntakeToggle } from "../intake-toggle";
 import { RsvpButtons } from "../rsvp-buttons";
 import { CheckInList, type CheckInMember } from "./check-in-list";
 
@@ -105,18 +107,26 @@ export default async function EventDetailPage({
           </div>
         </div>
         {isExec ? (
-          <div className="flex gap-2">
-            <EventFormDialog
-              event={{
-                id: event.id,
-                title: event.title,
-                description: event.description,
-                location: event.location,
-                startsAtLocal: toDateTimeLocal(event.startsAt),
-                endsAtLocal: event.endsAt ? toDateTimeLocal(event.endsAt) : "",
-              }}
+          <div className="flex flex-col items-end gap-2">
+            <IntakeToggle
+              eventId={event.id}
+              accepting={event.acceptingResponses}
             />
-            <DeleteEventButton eventId={event.id} title={event.title} />
+            <div className="flex gap-2">
+              <EventFormDialog
+                event={{
+                  id: event.id,
+                  title: event.title,
+                  description: event.description,
+                  location: event.location,
+                  startsAtLocal: toDateTimeLocal(event.startsAt),
+                  endsAtLocal: event.endsAt ? toDateTimeLocal(event.endsAt) : "",
+                  formSchema: parseFormSchema(event.formSchema),
+                  acceptingResponses: event.acceptingResponses,
+                }}
+              />
+              <DeleteEventButton eventId={event.id} title={event.title} />
+            </div>
           </div>
         ) : null}
       </div>
