@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
+import { clearSession } from "@/lib/session-store";
 import { resetPasswordSchema } from "@/lib/validations/auth";
 import { RESET_SLOT, consumeToken, hashToken } from "@/lib/verification";
 
@@ -32,7 +33,7 @@ export async function resetPasswordAction(
   const now = new Date();
   const target = await prisma.user.findFirst({
     where: { resetTokenHash: hashToken(token), resetTokenExpiry: { gt: now } },
-    select: { emailVerified: true },
+    select: { id: true, emailVerified: true },
   });
   if (!target) return { error: invalid };
 
@@ -50,6 +51,10 @@ export async function resetPasswordAction(
     now,
   );
   if (!ok) return { error: invalid };
+
+  // A completed reset signs out every existing session (SIGNUP.MD §10.1) — the
+  // one place stateless JWTs are actively revoked on a credential change.
+  await clearSession(target.id);
 
   // No auto-login (same rationale as /verify-email §4.2) — land on the login
   // page with a success notice. redirect() throws, so it must be last.
