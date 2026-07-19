@@ -19,6 +19,8 @@ and deviations.
 | Route | Who |
 |---|---|
 | `/login` | Everyone. Global — accounts are not per-club. |
+| `/signup` | Public. Create a platform account (email verification required). |
+| `/verify-email`, `/forgot-password`, `/reset-password` | Public. Email-verification and password-reset link targets. |
 | `/clubs` | Signed in. Your clubs. Auto-forwards if you have exactly one and nothing pending. |
 | `/clubs/new` | Signed in. Request a new club. |
 | `/admin` | Platform admins only (404 for everyone else). Approve, reject, suspend clubs. |
@@ -29,6 +31,30 @@ and deviations.
 Every request re-resolves the club from the slug and verifies the caller's
 membership server-side ([`src/lib/club-context.ts`](./src/lib/club-context.ts)).
 An id from one club never resolves under another club's slug — it 404s.
+
+## Accounts, email verification & password reset
+
+Accounts are created at `/signup` (or by applying to a club at
+`/{clubSlug}/register`). Both send a verification email and do **not** sign the
+new user in.
+
+- **Hard-gate verification.** An unverified account cannot sign in at all — the
+  gate lives in `authorize()`, so an unverified user never even mints a session.
+  Clicking the emailed link verifies the account and sends them to sign in.
+  Seeded, imported, and pre-existing accounts are backfilled as verified, so the
+  gate never locks them out.
+- **Password reset.** `/forgot-password` mails a 1-hour link (and never reveals
+  whether an address has an account); `/reset-password` sets the new password.
+  A completed reset also verifies the email, so it doubles as a recovery path for
+  an unverified account.
+- **Session revocation.** JWT sessions are paired with a server-side session id
+  in Redis (Upstash), checked on every request. Logging in on a new device
+  supersedes the old session; logout and a password reset revoke it immediately.
+  Tokens are single-use and stored only as SHA-256 hashes; verification and reset
+  use separate token slots.
+
+Verification/reset email and session revocation both degrade gracefully with no
+external services configured — see the environment table below.
 
 ## Club lifecycle
 
@@ -112,7 +138,10 @@ Guests also appear in the check-in list with a "Guest" badge.
 
 - **Next.js 16** (App Router, TypeScript strict, Server Actions for all mutations)
 - **PostgreSQL** + **Prisma 7** (driver adapter `@prisma/adapter-pg`)
-- **Auth.js (NextAuth v5)** — Credentials provider, JWT sessions, bcrypt hashing
+- **Auth.js (NextAuth v5)** — Credentials provider, JWT sessions, bcrypt hashing,
+  hard-gate email verification + password reset, Redis-backed session revocation
+- **Resend** for transactional email (console fallback in dev), **Upstash Redis**
+  for the session allowlist
 - **Tailwind CSS v4** + **shadcn/ui** (Base UI primitives)
 - **Zod** for all input validation
 
@@ -130,6 +159,16 @@ them in:
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string, used by the app at runtime. On Supabase, the **pooled** URL — see below. |
 | `AUTH_SECRET` | Secret for Auth.js JWT/session signing. Generate with `npx auth secret` or `openssl rand -base64 32`. |
+
+Email and session revocation are optional locally — each degrades gracefully
+when unset, so nothing below is required for development:
+
+| Variable | Description |
+|---|---|
+| `APP_URL` | Public origin used to build absolute links in emails. Defaults to `http://localhost:3000`. **Set it in every deployed environment.** |
+| `RESEND_API_KEY` | Resend API key for sending verification/reset email. **Unset → console mode**: the link is logged to the server console instead of sent, so dev/CI need no mail provider. |
+| `EMAIL_FROM` | Sender for those emails, e.g. `Club Portal <noreply@yourdomain>`. The domain must be verified in Resend (SPF/DKIM). Required only when `RESEND_API_KEY` is set. |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis (REST) for the JWT session allowlist. **Both unset → the revocation check is a no-op** (every session treated as valid). Set both to enable logout/reset revocation and one-session-per-user. |
 
 Two more exist for Supabase only. Leave them unset locally and nothing changes:
 
@@ -235,6 +274,9 @@ npm run import:members -- --club demo-club scripts/members.sample.csv
    | `DIRECT_URL` | **Direct connection** (port 5432) — migrations only |
    | `IS_SUPABASE` | `true` |
    | `AUTH_SECRET` | `npx auth secret` |
+   | `APP_URL` | The deployed origin, e.g. `https://your-app.vercel.app` — builds email links |
+   | `RESEND_API_KEY`, `EMAIL_FROM` | Resend key + verified sender, so verification/reset email actually sends |
+   | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis, to enable session revocation |
 
 4. Deploy. `postinstall` runs `prisma generate`; run `npm run db:deploy`
    (`prisma migrate deploy`) against the production database as part of your
@@ -268,12 +310,15 @@ prisma/
 scripts/
   import-members.ts    # CSV importer (--club <slug>)
 src/
-  auth.config.ts       # edge-safe Auth.js config (used by proxy)
-  auth.ts              # Auth.js instance (Credentials + Prisma + bcrypt)
+  auth.config.ts       # edge-safe Auth.js config (proxy + JWT session allowlist)
+  auth.ts              # Auth.js instance (Credentials + Prisma + bcrypt + hard gate)
   proxy.ts             # route protection (Next 16 middleware)
   app/
     (public)/
       login/           # global sign-in
+      signup/          # create a platform account (+ resend verification)
+      verify-email/    # verification link target
+      forgot-password/ reset-password/   # password-reset request + link target
       clubs/           # club switcher + /clubs/new (request a club)
     admin/             # platform admin (club lifecycle only)
     [clubSlug]/
@@ -286,6 +331,10 @@ src/
           [id]/responses/       # CSV export route handler
   lib/
     prisma.ts          # Prisma client (pg driver adapter)
+    verification.ts    # single-use, hashed token lib (email verify + reset)
+    email.ts           # Resend sender (console fallback in dev)
+    session-store.ts   # Upstash Redis JWT session allowlist (revocation)
+    app-url.ts         # absolute-URL builder for email links (APP_URL)
     club-context.ts    # getClubBySlug / requireClubAccess / cross-club guards
     club.ts            # club settings parsing
     admin.ts           # requirePlatformAdmin

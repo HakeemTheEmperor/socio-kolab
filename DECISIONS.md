@@ -1187,6 +1187,104 @@ plus the Phase-4/5 live DB scripts and `next build`:
   timestamps; slugified filename.
 - **`next build`** → passes with zero TypeScript errors.
 
+## Platform signup, email verification, password reset & session revocation
+
+Full plan in [SIGNUP.MD](./SIGNUP.MD); the load-bearing choices are recorded here.
+
+### Hard gate, not soft
+An unverified account **cannot sign in at all** — the check lives in
+`authorize()` (`src/auth.ts`), so an unverified user never mints a JWT and no
+per-request `emailVerified` check is needed anywhere downstream (the proxy stays
+untouched). The alternative — letting them in but nagging — was rejected: a hard
+gate is one check in one place, and the payoff is that verification status is a
+login-time concern only. The cost is that deliverability becomes load-bearing, so
+the migration **backfills every pre-existing user as verified** and seeds/import
+set `emailVerified` at creation, or the gate would lock out the whole seeded and
+imported roster on the day it ships.
+
+### Tokens: hashed at rest, single-use, two separate slots
+The email carries a raw `randomBytes(32)` token; the DB stores only its
+`sha256`, so a leaked row can't verify or reset anything. Consuming is one
+guarded `updateMany` (match hash **and** unexpired, clear the columns in the same
+statement), which makes double-consume impossible without an explicit
+transaction. Verification and reset get **separate column trios** on `User`, so a
+verification resend can't silently kill a pending reset link. Issuing overwrites
+the slot, so one live token per user per slot with no delete-then-insert.
+
+### Verification consumes on view; reset consumes on POST
+`/verify-email` burns the token in the page's server render — a verification link
+is a formality (24h life), so a mail prefetcher spending it is acceptable.
+`/reset-password` does **not** consume on view (a reset link is a credential, 1h
+life); the token rides a hidden field and is spent only on the form POST, so a
+prefetcher can't dead-end a real reset.
+
+### A completed reset also verifies the email
+Clicking a link mailed to the address is exactly the proof verification wants, so
+a successful reset stamps `emailVerified` — **but only if it was still null**, to
+preserve an already-verified account's original timestamp. Without this, an
+unverified user who resets stays locked out by the hard gate with no way forward.
+Reset therefore doubles as the unverified-account recovery path.
+
+### Disclosure is asymmetric on purpose
+Signup and resend **disclose** whether an email already exists ("sign in
+instead") — it helps a returning user and matches the existing per-club register
+behaviour, which already discloses. Password reset **never** discloses: every
+outcome (no account, throttled, sent) returns an identical response, because a
+reset request is the classic account-enumeration oracle.
+
+### Login distinguishes "unverified" from "wrong password" — belt and suspenders
+`authorize()` throws a `CredentialsSignin` subclass carrying
+`code: "email_not_verified"`, but the next-auth v5 **beta** may not preserve a
+custom code through to the server action, so `loginAction` also **re-checks
+server-side** (re-query + bcrypt compare + `emailVerified`). Only a *correct*
+password on an unverified account shows the "verify first" state; a wrong
+password stays a generic failure, so the distinction never becomes an oracle.
+
+### Email: Resend over `fetch`, console fallback
+No SDK dependency — `sendEmail` POSTs to Resend's REST API directly. With
+`RESEND_API_KEY` unset it logs the link to the console instead, so dev and CI
+never require a mail provider (mirrors the no-op session store).
+
+### Session revocation: Redis allowlist, one session per user, fail-open
+Stateless JWTs can't be revoked, so each JWT carries a `jti` recorded in Upstash
+Redis under **one key per user** (`user_token:${userId}`), checked in the `jwt`
+callback on every request. Consequences, all deliberate:
+- **One session per user** — a new login overwrites the key, so signing in on a
+  second device logs out the first. If multi-device is ever wanted, the key flips
+  to per-session (`session:${jti}`) with no change to the JWT shape.
+- **Edge-safe client** — the check runs in the proxy (edge runtime), so it uses
+  `@upstash/redis` (REST/fetch); `ioredis`/`node-redis` (raw TCP) would not run
+  there. `src/lib/session-store.ts` imports no Prisma/bcrypt, the same rule
+  `auth.config.ts` follows.
+- **Fail-open** — a Redis error logs a `[session-store]` warning and treats the
+  session as valid. Fail-closed would turn any Upstash blip into a sitewide
+  lockout; pausing revocation during an outage is the better trade at this scale.
+- **No-op without config** — both env vars unset (dev/CI) disables the check
+  entirely, so revocation is only truly exercised against a real Upstash instance.
+- Logout and a completed password reset both delete the key, so a credential
+  change signs out every existing session — the gap the plan originally deferred.
+
+### Minor deviations from the plan
+- `forgotPasswordSchema` (§8) would be byte-identical to the `emailOnlySchema`
+  already added for resend, so that one schema serves both rather than duplicating.
+- `LoginForm` reads `?verified=1` / `?reset=1` via `useSearchParams`, which the
+  App Router requires under a `Suspense` boundary — so the form is wrapped in one
+  on the login page.
+
+### Verified
+- **Unit** — token lib (hash round-trip, expiry, single-use, throttle) and the
+  session store (no-op, match/mismatch/missing-jti, fail-open, TTL'd write/delete)
+  are covered by vitest; `tsc` and `eslint` clean.
+- **Against the live dev database** — an end-to-end token round-trip on a
+  throwaway user: verification and reset both issue with only the hash stored
+  (never the raw), consume once, clear the slot, mark/preserve `emailVerified`,
+  and reject replays.
+- **Manual click-through** (running server) still owns the full HTTP flow: signup
+  → console link → verify → login; unverified login blocked with resend;
+  expired/reused token; throttle; forgot → reset → login; second login kills the
+  first session; logout/revoked-session bounce to `/login`; existing seeded users
+  still log in.
+
 The two interactive-only items — keyboard-only drag-reorder of fields, and opening
 the CSV in Excel — follow the documented dnd-kit keyboard-sensor path and the
 BOM/escaping rules respectively, and want a final human eyeball in the browser.
