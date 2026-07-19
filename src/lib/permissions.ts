@@ -13,6 +13,7 @@ export type Action =
   | "member:approve"
   | "member:changeStatus"
   | "member:changeRole"
+  | "member:import"
   | "dues:record"
   | "dues:viewDashboard"
   | "dues:viewOwn"
@@ -34,6 +35,9 @@ const PERMISSIONS: Record<Action, Role[]> = {
   "member:approve": EXECS,
   "member:changeStatus": EXECS,
   "member:changeRole": PRESIDENT_ONLY,
+  // Bulk import is exec-level: treasurers/secretaries onboard the roster, not
+  // just the president (BULKUPLOAD.MD §4).
+  "member:import": EXECS,
   "dues:record": EXECS,
   "dues:viewDashboard": EXECS,
   "dues:viewOwn": ALL,

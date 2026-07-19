@@ -240,10 +240,26 @@ straight to that club's dashboard; `ada.obi@club.test` lands on `/clubs` and pic
 > The seed clears existing data first for a deterministic dataset — do not run it
 > against a database with real data.
 
-## Bulk-importing members (CSV)
+## Bulk-importing members
 
-Import members from a CSV with header `name,email,phone,department,level`. The
-club is named by slug and is **required** — there is no "current" club:
+There are two ways to add members in bulk. Both accept the columns
+`name,email,phone,department,level` and create ACTIVE memberships; an existing
+user just gains a membership in the club (no duplicate, no password change).
+
+### In-app (execs) — invite links
+
+On `/{clubSlug}/members`, execs get an **Import members** action: upload a CSV or
+paste rows, review the validated preview, and import. Each **new** account is
+emailed a single-use link to set its own password — no password is generated or
+shared. The link (`/accept-invite?token=…`) verifies the address and sets the
+password in one step; it expires after 7 days. This needs the email env vars
+(`RESEND_API_KEY`, `EMAIL_FROM`, `APP_URL`); without `RESEND_API_KEY` the link is
+logged to the server console (dev mode). See [BULKUPLOAD.MD](./plans/BULKUPLOAD.MD).
+
+### CLI (operator) — default password
+
+For operator-run onboarding, the CLI importer sets a shared default password
+instead of emailing invites. The club is named by slug and is **required**:
 
 ```bash
 npm run import:members -- --club <slug> path/to/members.csv [defaultPassword]

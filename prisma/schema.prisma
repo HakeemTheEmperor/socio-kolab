@@ -76,6 +76,14 @@ model User {
   resetTokenSentAt DateTime?
   resetTokenExpiry DateTime?
 
+  // Member invite — a third never-shared slot for bulk-import onboarding
+  // (BULKUPLOAD.MD §1). An invite sits unopened in an inbox for days, so it lives
+  // 7d (vs verification 24h, reset 1h); a separate slot means a real
+  // password-reset request and a pending invite never clobber each other.
+  inviteTokenHash   String?   @unique
+  inviteTokenSentAt DateTime?
+  inviteTokenExpiry DateTime?
+
   memberships Membership[]
 
   createdAt DateTime @default(now())

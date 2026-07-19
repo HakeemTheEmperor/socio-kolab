@@ -21,8 +21,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TopbarActions } from "@/components/app-shell/topbar-actions";
 import { MembersFilters } from "./members-filters";
 import { ApprovalButtons } from "./approval-buttons";
+import { BulkUploadDialog } from "./bulk-upload-dialog";
 
 export const metadata: Metadata = { title: "Members — Club Portal" };
 
@@ -110,6 +112,12 @@ async function MembersDirectory({
 
   return (
     <div className="space-y-6">
+      {isExec ? (
+        <TopbarActions>
+          <BulkUploadDialog />
+        </TopbarActions>
+      ) : null}
+
       <p className="text-[13px] text-muted-foreground">
         {members.length} member{members.length === 1 ? "" : "s"}
         {isExec ? ` · dues period ${settings.currentPeriod}` : ""}

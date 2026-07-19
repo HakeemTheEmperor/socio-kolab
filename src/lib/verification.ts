@@ -24,9 +24,9 @@ import type { Prisma } from "@/generated/prisma/client";
 
 /** Which trio of `User` columns a token occupies, plus how long it lives. */
 export interface TokenSlot {
-  hash: "verificationTokenHash" | "resetTokenHash";
-  sentAt: "verificationTokenSentAt" | "resetTokenSentAt";
-  expiry: "verificationTokenExpiry" | "resetTokenExpiry";
+  hash: "verificationTokenHash" | "resetTokenHash" | "inviteTokenHash";
+  sentAt: "verificationTokenSentAt" | "resetTokenSentAt" | "inviteTokenSentAt";
+  expiry: "verificationTokenExpiry" | "resetTokenExpiry" | "inviteTokenExpiry";
   /** Lifetime of a freshly issued token, in milliseconds. */
   ttlMs: number;
 }
@@ -50,6 +50,19 @@ export const RESET_SLOT: TokenSlot = {
   sentAt: "resetTokenSentAt",
   expiry: "resetTokenExpiry",
   ttlMs: 1 * HOUR,
+};
+
+/**
+ * Bulk-import invites (BULKUPLOAD.MD §2). Unlike a reset (a credential the user
+ * asked for seconds ago) an invite is pushed to an inbox and may sit unopened
+ * for days, so it lives a generous 7d. Its own slot keeps a pending invite and
+ * a real password reset from clobbering one another.
+ */
+export const INVITE_SLOT: TokenSlot = {
+  hash: "inviteTokenHash",
+  sentAt: "inviteTokenSentAt",
+  expiry: "inviteTokenExpiry",
+  ttlMs: 7 * 24 * HOUR,
 };
 
 /** A resend is refused if the previous one went out less than this ago. */
@@ -159,4 +172,29 @@ export function consumeVerificationToken(raw: string): Promise<boolean> {
 /** Issue a password-reset token for `userId` (SIGNUP.MD §9.1). */
 export function createResetToken(userId: string): Promise<IssueResult> {
   return issueToken(RESET_SLOT, userId);
+}
+
+/** Issue a member-invite token for `userId` (BULKUPLOAD.MD §2). */
+export function createInviteToken(userId: string): Promise<IssueResult> {
+  return issueToken(INVITE_SLOT, userId);
+}
+
+/**
+ * Consume an invite token: on success set the freshly chosen password, clear the
+ * imported-member `mustChangePassword` flag ("prove you chose your own
+ * password", same as a reset — SIGNUP.MD §9.2), and stamp `emailVerified` if it
+ * is still null. Imports pre-verify the address, so `emailVerified` is passed by
+ * the caller (existing value ?? now), keeping the vouch time intact while still
+ * self-healing an unverified import.
+ */
+export function consumeInviteToken(
+  raw: string,
+  passwordHash: string,
+  emailVerified: Date,
+): Promise<boolean> {
+  return consumeToken(INVITE_SLOT, raw, {
+    passwordHash,
+    mustChangePassword: false,
+    emailVerified,
+  });
 }

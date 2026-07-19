@@ -43,8 +43,13 @@ export const authConfig = {
       }
 
       // Public link targets — reachable signed in or out, so a user can open the
-      // emailed link in a browser carrying an old session (§7).
-      if (pathname === "/verify-email" || pathname === "/reset-password") {
+      // emailed link in a browser carrying an old session (§7). /accept-invite is
+      // the bulk-import onboarding link (BULKUPLOAD.MD §7).
+      if (
+        pathname === "/verify-email" ||
+        pathname === "/reset-password" ||
+        pathname === "/accept-invite"
+      ) {
         return true;
       }
 

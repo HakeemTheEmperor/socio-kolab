@@ -91,6 +91,28 @@ export function sendVerificationEmail(
   });
 }
 
+/**
+ * Email a bulk-imported member their invite link (BULKUPLOAD.MD §6). The link
+ * both verifies the address and lets them choose their own password — no
+ * password is ever generated or sent.
+ */
+export function sendInviteEmail(
+  to: string,
+  name: string,
+  clubName: string,
+  inviteUrl: string,
+): Promise<void> {
+  const intro = `Hi ${name}, you've been added to ${clubName} on Club Portal. Set your password to get started.`;
+  return sendEmail({
+    to,
+    subject: `You've been added to ${clubName}`,
+    text:
+      `${intro}\n\nSet your password: ${inviteUrl}\n\n` +
+      `This link expires in 7 days.`,
+    html: linkEmailHtml(intro, inviteUrl, "Set your password"),
+  });
+}
+
 /** Email a user their password-reset link (SIGNUP.MD §9). */
 export function sendPasswordResetEmail(
   to: string,

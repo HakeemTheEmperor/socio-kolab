@@ -14,9 +14,11 @@ vi.mock("@/lib/prisma", () => ({
 
 import { prisma } from "@/lib/prisma";
 import {
+  INVITE_SLOT,
   RESEND_THROTTLE_MS,
   RESET_SLOT,
   VERIFICATION_SLOT,
+  consumeInviteToken,
   consumeToken,
   consumeVerificationToken,
   generateRawToken,
@@ -90,12 +92,19 @@ describe("slot constants", () => {
     expect(RESET_SLOT.ttlMs).toBe(60 * 60 * 1000);
   });
 
-  it("never shares a column between the two slots", () => {
+  it("uses a generous 7d for invites", () => {
+    expect(INVITE_SLOT.ttlMs).toBe(7 * 24 * 60 * 60 * 1000);
+  });
+
+  it("never shares a column between any two slots", () => {
     const cols = (s: typeof VERIFICATION_SLOT) => [s.hash, s.sentAt, s.expiry];
-    const overlap = cols(VERIFICATION_SLOT).filter((c) =>
-      cols(RESET_SLOT).includes(c),
-    );
-    expect(overlap).toEqual([]);
+    const all = [
+      ...cols(VERIFICATION_SLOT),
+      ...cols(RESET_SLOT),
+      ...cols(INVITE_SLOT),
+    ];
+    // No column name appears in more than one slot.
+    expect(new Set(all).size).toBe(all.length);
   });
 });
 
@@ -183,5 +192,34 @@ describe("consumeVerificationToken", () => {
 
     const data = updateMany.mock.calls[0][0].data as Record<string, unknown>;
     expect(data.emailVerified).toBeInstanceOf(Date);
+  });
+});
+
+describe("consumeInviteToken", () => {
+  const now = new Date("2026-07-19T12:00:00Z");
+
+  it("sets the new password, clears mustChangePassword, and keeps the vouched verify time", async () => {
+    updateMany.mockResolvedValue({ count: 1 } as never);
+
+    const ok = await consumeInviteToken("raw", "hash-of-new-pw", now);
+    expect(ok).toBe(true);
+
+    const arg = updateMany.mock.calls[0][0];
+    const where = arg.where as Record<string, unknown>;
+    const data = arg.data as Record<string, unknown>;
+    // Guarded on the invite slot's hash, and it clears that slot on consume.
+    expect(where.inviteTokenHash).toBe(hashToken("raw"));
+    expect(data.inviteTokenHash).toBeNull();
+    expect(data.inviteTokenSentAt).toBeNull();
+    expect(data.inviteTokenExpiry).toBeNull();
+    // The chosen password lands; the imported-member flag is cleared.
+    expect(data.passwordHash).toBe("hash-of-new-pw");
+    expect(data.mustChangePassword).toBe(false);
+    expect(data.emailVerified).toEqual(now);
+  });
+
+  it("fails for an invalid or expired invite (no row matched)", async () => {
+    updateMany.mockResolvedValue({ count: 0 } as never);
+    expect(await consumeInviteToken("stale", "h", now)).toBe(false);
   });
 });

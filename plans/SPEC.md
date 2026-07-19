@@ -166,6 +166,7 @@ model Attendance {
 | View full member details (phone, email, dues) | own only | ✅ | ✅ |
 | Edit own profile (phone, dept, level) | ✅ | ✅ | ✅ |
 | Approve/reject pending members | ❌ | ✅ | ✅ |
+| Bulk import members (CSV / paste) | ❌ | ✅ | ✅ |
 | Change member status (active/inactive/alumni) | ❌ | ✅ | ✅ |
 | Change member roles | ❌ | ❌ | ✅ |
 | Record/edit dues payments | ❌ | ✅ | ✅ |
@@ -199,6 +200,7 @@ All pages behind auth except `/login` and `/register`.
 ### `/members`
 - Table: name, department, level, committee, status. Search by name; filter by status, department, committee.
 - Execs see extra columns (email, phone, dues status) and a pending-approvals section at top with Approve/Reject buttons.
+- Execs get an "Import members" action (topbar) → dialog accepting a CSV upload or pasted `name,email,phone,department,level` rows, with a validated preview. Each new account is created ACTIVE and emailed a single-use invite link to set its own password (no password is generated or shared). See [BULKUPLOAD.MD](./BULKUPLOAD.MD).
 - Row click → `/members/[id]` detail page: profile info, dues history, attendance history. Execs can edit status/committee; president can edit role.
 
 ### `/dues`  (exec-only)

@@ -1382,3 +1382,49 @@ candidate review, close/cancel — with the president avoids the conflict of
 interest of an exec administering their own race. `toLagosDate`/`optionalText`
 were extracted from `validations/events.ts` into `validations/shared.ts` so the
 elections schema reuses the identical Africa/Lagos datetime-local handling.
+
+# Phase — Bulk member upload
+
+Execs can onboard a roster in-app by uploading a CSV or pasting rows, planned in
+[BULKUPLOAD.MD](./BULKUPLOAD.MD). The load-bearing decisions:
+
+## Invite link, not a generated password
+
+An imported member is emailed a single-use link that both verifies their address
+and lets them set their own password — nothing generates or transmits a
+credential. This reuses the token machinery built for verification/reset (the
+reset flow was already designed to double as imported-member onboarding; see the
+`mustChangePassword` note under the sign-up phase). Rejected alternatives:
+emailing a generated password (a real credential in plaintext mail, rarely
+rotated) and returning passwords to the uploading exec (the exec would learn
+every member's secret, and the hard gate blocks login until the email is verified
+anyway). The invite link is strictly better on both.
+
+## A third token slot, `INVITE_SLOT` (7-day TTL)
+
+Invites get their own trio of `User` columns (`inviteTokenHash` / `…SentAt` /
+`…Expiry`), never shared with verification or reset — same isolation rationale as
+keeping verification and reset apart, so a real password-reset request and a
+pending invite can't clobber each other. TTL is 7 days: an invite is pushed to an
+inbox and may sit for days (vs verification 24h, reset 1h, which the recipient
+asked for seconds earlier).
+
+## Imported accounts: ACTIVE and pre-verified
+
+New accounts are created `ACTIVE` with `emailVerified` set and
+`mustChangePassword: true` — an exec vouching for an address is the same trust the
+CLI importer and seeds already rely on, so there's no separate approval. The
+account is still unusable until the invite is accepted: its `passwordHash` is a
+random, unknown value shared across the batch (safe — it can never be logged in
+with, and the invite overwrites it), avoiding a per-row bcrypt cost.
+
+## Users are global; memberships are per-club
+
+An imported email that already has a `User` (e.g. a member of another club) reuses
+that account and only gains a `Membership` here. An established user keeps their
+working credentials — no invite, no reset; only an account that never set its own
+password (`mustChangePassword` still true) is re-invited. An existing membership
+in this club is reported as skipped, never duplicated. `member:import` is a
+distinct EXEC-level permission rather than an overload of `member:approve`. The
+action re-parses and re-validates the raw text server-side; the client-side
+preview is UX only.

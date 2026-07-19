@@ -22,7 +22,9 @@ export function LoginForm() {
       ? "Email verified — sign in to continue."
       : params.get("reset") === "1"
         ? "Password reset — sign in with your new password."
-        : null;
+        : params.get("invited") === "1"
+          ? "Password set — sign in to access your club."
+          : null;
 
   // The hard gate rejected a correct password on an unverified account: offer a
   // resend instead of a dead-end error (SIGNUP.MD §5.2).
