@@ -137,6 +137,7 @@ async function main() {
       name: "Platform Admin",
       passwordHash,
       isPlatformAdmin: true,
+      emailVerified: new Date(), // seeded accounts skip the hard gate (SIGNUP.MD §1.3)
     },
   });
 
@@ -146,7 +147,12 @@ async function main() {
     return prisma.user.upsert({
       where: { email },
       update: {},
-      create: { email, name: spec.name, passwordHash },
+      create: {
+        email,
+        name: spec.name,
+        passwordHash,
+        emailVerified: new Date(), // seeded accounts skip the hard gate (SIGNUP.MD §1.3)
+      },
     });
   }
 

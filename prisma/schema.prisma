@@ -54,7 +54,28 @@ model User {
   passwordHash       String
   mustChangePassword Boolean @default(false)
   isPlatformAdmin    Boolean @default(false)
-  memberships        Membership[]
+
+  // Email verification (SIGNUP.MD §1). `emailVerified` is a DateTime, not a
+  // boolean — it records *when*, matches the Auth.js convention, and null reads
+  // as "never verified" (the hard gate blocks login while it is null).
+  emailVerified DateTime?
+
+  // One live verification token per user, stored inline (SIGNUP.MD §1.2). The
+  // email carries the raw token; the DB stores only sha256(raw), so a leaked row
+  // cannot verify an account. Issuing a new token overwrites these columns,
+  // which *is* the invalidation of any previous link. All three move together:
+  // set on issue, null on consume.
+  verificationTokenHash   String?   @unique
+  verificationTokenSentAt DateTime?
+  verificationTokenExpiry DateTime?
+
+  // Password reset — a parallel, never-shared token slot (SIGNUP.MD §1.2, §9),
+  // so a verification resend can't kill a pending reset link or vice versa.
+  resetTokenHash   String?   @unique
+  resetTokenSentAt DateTime?
+  resetTokenExpiry DateTime?
+
+  memberships Membership[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

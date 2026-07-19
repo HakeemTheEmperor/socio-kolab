@@ -331,43 +331,156 @@ out by the hard gate (§5) with no path forward.
 
 ### 9.4 Deliberately out of scope
 
-- **No session invalidation on password change.** Sessions are stateless JWTs;
-  existing sessions live until expiry. Revoking them needs a token-generation
-  field checked per request — noted in §11, not built now.
 - **No "your password was changed" notification email** — a follow-up once
   templates grow beyond two.
 
+(Session invalidation on password change *is* in scope — handled by the Redis
+session allowlist, §10.)
+
 ---
 
-## 10. Build order
+## 10. Session invalidation — Redis session allowlist
 
-Each step leaves the app working:
+The verification/reset tokens above are single-use by construction (§2), but
+session JWTs are stateless: nothing today can revoke one before its 30-day
+expiry. Fix: pair every JWT with a server-side session id in Redis, checked on
+every request. Deleting the Redis key kills the session immediately.
+
+### 10.1 Design
+
+- **On sign-in** (`jwt` callback, `if (user)` branch): mint a session id
+  (`crypto.randomUUID()`), stamp it into the token as `token.jti`, and write it
+  to Redis:
+  - Key: `user_token:${userId}`
+  - Value: the session id
+  - TTL: the session `maxAge` (Auth.js default 30d), so Redis never outlives
+    the JWT and abandoned keys clean themselves up.
+- **One session per user, by design**: the key is per-*user*, not per-token,
+  so a new login overwrites the value — the previous device's JWT now carries
+  a stale `jti` and is dead on its next request. This is the intended
+  behaviour, not a limitation.
+- **On every request** (`jwt` callback, refresh branch): `GET
+  user_token:${userId}` and compare with `token.jti`. Mismatch or missing key →
+  return `null` — Auth.js drops the session and the proxy's `authorized()`
+  sees a signed-out visitor. No separate check in `session()` or the proxy;
+  the `jwt` callback runs for both, once is enough.
+- **On logout**: delete the key in the `signOut` event.
+- **On password reset**: `resetPasswordAction` (§9.2) deletes the key after
+  the guarded update succeeds — a successful reset signs out every existing
+  session. This closes the gap §9.4 used to defer.
+
+### 10.2 Edge constraint → client choice
+
+The `jwt` callback executes inside the proxy (edge runtime), so the Redis
+client must be edge-safe: **`@upstash/redis`** (REST over fetch, no TCP).
+`ioredis`/`node-redis` will not run there. Small wrapper in
+`src/lib/session-store.ts` (edge-safe, no Prisma/bcrypt imports — same rule as
+`auth.config.ts`) with `setSession(userId, jti)`, `getSession(userId)`,
+`clearSession(userId)`.
+
+**Env vars**: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`. When
+unset (dev/CI), the wrapper becomes a no-op that always reports "valid" — the
+app must never require Redis locally, mirroring §3's console-mode email.
+
+### 10.3 Failure mode: fail-open
+
+If the Redis call throws (outage, timeout), **log a warning and treat the
+session as valid**. Fail-closed would turn any Redis blip into a full lockout
+of every user; for this app, revocation silently pausing during an outage is
+the better trade. The warning must be loud enough to notice
+(`console.error` with a distinct prefix, e.g. `[session-store]`).
+
+### 10.4 Cost
+
+One Redis round-trip per matched request through the proxy (single-digit ms
+via Upstash REST from edge). That is the price of making stateless JWTs
+revocable, paid only once per request by keeping the check solely in the
+`jwt` callback.
+
+---
+
+## 11. Build order
+
+Each step leaves the app working, 7 steps. After each, commit with the message
+shown (do not squash — one commit per step keeps the gate's dependency order
+legible in history):
 
 1. **Schema + migration + backfill** (§1) — inert until the gate lands.
+   > `feat(auth): add emailVerified + verification/reset token columns`
+   >
+   > Adds seven nullable User columns: emailVerified (DateTime, null =
+   > unverified) plus two never-shared token slots — verification and
+   > reset — each a unique hash + sentAt + expiry, so tokens are stored
+   > hashed-at-rest and a resend on one slot can't disturb the other.
+   >
+   > The migration backfills emailVerified = createdAt for every existing
+   > row before the unique indexes are added, so the later hard gate (§5)
+   > can't lock out any seeded, imported, or already-registered user.
+   >
+   > Seeds (seed.ts, seed.prod.ts) and the member importer set
+   > emailVerified at creation, since an operator has already vouched for
+   > those addresses. Columns are inert until the gate lands.
 2. **Token lib + tests** (§2), **email lib** (§3, console mode first).
+   > `feat(auth): add slot-generic token lib and Resend email sender`
+   >
+   > Single-use, hashed-at-rest tokens with 60s resend throttle (vitest
+   > covered); email sender via Resend with a console fallback so dev/CI
+   > need no mail provider.
 3. **`/signup` + `/verify-email` pages/actions** (§4.1–4.2), proxy allowlist (§7).
+   > `feat(auth): add signup and email-verification flow`
+   >
+   > Public /signup and /verify-email pages plus their actions, with the
+   > proxy allowlist opening the new public paths. No hard gate yet.
 4. **Hard gate** (§5) + login-page states (§4.3) — *only after 1–3 are in*,
    since the gate depends on backfill and on a working verify path.
-5. **Per-club register flow alignment** (§6).
-6. **Password reset** (§9) — pure reuse of steps 1–2's machinery; can land
-   any time after step 2, but must ship before (or with) the hard gate reaches
-   real users, since the gate makes "forgot my password" otherwise dead-ended.
-7. Seeds/import updates (§1.3), README + `.env.example`, DECISIONS.md entry
-   (hard vs. soft gate rationale, token hashing, Resend choice, reset≡verify).
-8. Manual verify pass: signup → console link → verify → login;
-   unverified login blocked with resend; expired/reused token; throttle;
-   forgot → reset → login (and reset of an unverified account verifies it);
-   reset response identical for unknown emails; existing seeded users still
-   log in.
+   > `feat(auth): hard-gate login on email verification`
+   >
+   > authorize() rejects unverified accounts after the bcrypt check;
+   > loginAction distinguishes the unverified state and offers resend.
+5. **Per-club register flow alignment** (§6) + **password reset** (§9) — reset
+   reuses step 2's machinery and must ship before (or with) the hard gate
+   reaches real users, since the gate makes "forgot my password" otherwise
+   dead-ended.
+   > `feat(auth): align club register with gate and add password reset`
+   >
+   > registerAction drops its auto-signIn and sends a verification email;
+   > adds /forgot-password and /reset-password (non-disclosing, 1h token,
+   > a completed reset also verifies the email).
+6. **Session allowlist** (§10): `session-store.ts` wrapper (no-op without env),
+   `jwt`-callback mint + check, `signOut` delete, reset-action delete.
+   > `feat(auth): add Redis session allowlist for JWT revocation`
+   >
+   > Mints a session id per JWT and validates it against Upstash in the
+   > jwt callback (edge-safe, fail-open, one session per user). Logout and
+   > password reset now revoke the session; no-op without Redis env.
+7. **Wrap-up**: seeds/import updates (§1.3), README + `.env.example` (email +
+   Redis vars), DECISIONS.md entry (hard vs. soft gate, token hashing, Resend,
+   reset≡verify, one-session-per-user + fail-open rationale), and the manual
+   verify pass: signup → console link → verify → login; unverified login
+   blocked with resend; expired/reused token; throttle; forgot → reset → login
+   (reset of an unverified account verifies it; reset response identical for
+   unknown emails); second login kills the first session; logout + revoked
+   session bounce to `/login`; existing seeded users still log in.
+   > `docs(auth): document signup/verification/reset + env and decisions`
+   >
+   > README and .env.example gain the email and Redis vars; DECISIONS.md
+   > records the hard-gate, token-hashing, Resend, reset≡verify, and
+   > one-session-per-user + fail-open rationale. Closes the manual pass.
 
-## 11. Known risks / accepted trade-offs
+## 12. Known risks / accepted trade-offs
 
 - **Deliverability is the whole ballgame** for a hard gate: a spam-foldered
   mail = a locked-out user. Mitigations: verified sending domain (SPF/DKIM) in
   Resend before launch, prominent resend affordance, 24h token life.
-- **Password changes don't revoke existing sessions** (stateless JWTs, §9.4).
-  Acceptable at this scale; the fix (a per-user token generation checked in the
-  `session`/`jwt` callback) is a known follow-up.
+- **Revocation depends on Redis being up** (§10.3 fail-open): during an
+  Upstash outage, revoked sessions keep working until the outage ends. Accepted
+  — the alternative (fail-closed) turns any blip into a sitewide lockout.
+- **One session per user** (§10.1) means signing in on a second device logs
+  out the first. Deliberate; if multi-device is ever wanted, the key flips to
+  per-session (`session:${jti}` → userId) without touching the JWT shape.
+- **Dev/CI run with the no-op session store** (§10.2): revocation paths are
+  only truly exercised against a real Upstash instance — cover them in the
+  step-7 manual pass, not just unit tests.
 - Email-existence disclosure on signup is accepted for UX, consistent with the
   existing per-club flow. **Reset does not disclose** (§9.1) — the asymmetry
   is intentional: signup discloses to help a returning user, reset would

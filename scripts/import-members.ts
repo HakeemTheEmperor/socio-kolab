@@ -137,6 +137,9 @@ async function main() {
         name,
         passwordHash,
         mustChangePassword: true,
+        // An operator vouched for this address, so it's pre-verified — imported
+        // members skip the hard gate and go straight to first login (SIGNUP.MD §1.3).
+        emailVerified: new Date(),
       },
     });
     await prisma.membership.create({
