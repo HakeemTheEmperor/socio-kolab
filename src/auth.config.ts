@@ -20,18 +20,22 @@ export const authConfig = {
       const isLoggedIn = !!auth?.user;
       const { pathname } = nextUrl;
 
-      // Signing in and signing up are global doors; a signed-in visitor has no
-      // business at either (SIGNUP.MD §7).
-      if (pathname === "/login" || pathname === "/signup") {
+      // Global doors — signing in, signing up, and starting a password reset; a
+      // signed-in visitor has no business at any of them (SIGNUP.MD §7).
+      if (
+        pathname === "/login" ||
+        pathname === "/signup" ||
+        pathname === "/forgot-password"
+      ) {
         if (isLoggedIn) {
           return Response.redirect(new URL("/clubs", nextUrl));
         }
         return true;
       }
 
-      // /verify-email is the public link target — reachable signed in or out, so
-      // a user can open the link in a browser carrying an old session (§7).
-      if (pathname === "/verify-email") {
+      // Public link targets — reachable signed in or out, so a user can open the
+      // emailed link in a browser carrying an old session (§7).
+      if (pathname === "/verify-email" || pathname === "/reset-password") {
         return true;
       }
 

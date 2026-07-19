@@ -3,6 +3,7 @@
 import bcrypt from "bcryptjs";
 
 import { prisma } from "@/lib/prisma";
+import { appUrl } from "@/lib/app-url";
 import { signupSchema, emailOnlySchema } from "@/lib/validations/auth";
 import { createVerificationToken } from "@/lib/verification";
 import { sendVerificationEmail } from "@/lib/email";
@@ -13,11 +14,8 @@ export type SignupState = {
   sent?: { email: string };
 };
 
-/** Absolute verification link. APP_URL is the deployed origin (SIGNUP.MD §3). */
-function verifyUrl(rawToken: string): string {
-  const origin = process.env.APP_URL ?? "http://localhost:3000";
-  return `${origin}/verify-email?token=${rawToken}`;
-}
+const verifyUrl = (rawToken: string) =>
+  appUrl(`/verify-email?token=${rawToken}`);
 
 /**
  * Create a platform account and mail a verification link (SIGNUP.MD §4.1).

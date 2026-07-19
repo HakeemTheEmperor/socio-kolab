@@ -52,8 +52,23 @@ export const signupSchema = z
     path: ["confirmPassword"],
   });
 
-/** A bare email, for resend-verification requests (SIGNUP.MD §4.1, §4.2). */
+/**
+ * A bare email — for resend-verification (SIGNUP.MD §4.1, §4.2) and for starting
+ * a password reset (§9.1). Both take nothing but an address.
+ */
 export const emailOnlySchema = z.object({ email: emailField });
+
+/** Set a new password from a reset link (SIGNUP.MD §9.2). */
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().min(1),
+    password: passwordField,
+    confirmPassword: z.string(),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: "Passwords don't match.",
+    path: ["confirmPassword"],
+  });
 
 /**
  * Applying to a club while already signed in: the account already exists, so

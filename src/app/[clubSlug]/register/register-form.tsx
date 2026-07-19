@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useActionState } from "react";
+import { MailCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ResendVerification } from "@/app/(public)/signup/resend-verification";
 import { registerAction, type RegisterState } from "./actions";
 
 export function RegisterForm({ departments }: { departments: string[] }) {
@@ -24,6 +26,42 @@ export function RegisterForm({ departments }: { departments: string[] }) {
     registerAction.bind(null, clubSlug),
     {},
   );
+
+  // Application filed, but the account is unverified and (post hard gate) not
+  // signed in: show a "check your email" state instead (SIGNUP.MD §6).
+  if (state.sent) {
+    return (
+      <div className="space-y-4 text-center">
+        <MailCheck
+          aria-hidden
+          strokeWidth={1.5}
+          className="mx-auto size-10 text-primary"
+        />
+        <div className="space-y-1">
+          <p className="font-medium">Check your email</p>
+          <p className="text-sm text-muted-foreground">
+            Your application to{" "}
+            <span className="font-medium text-foreground">
+              {state.sent.clubName}
+            </span>{" "}
+            is in. We sent a verification link to{" "}
+            <span className="font-medium text-foreground">
+              {state.sent.email}
+            </span>
+            — click it to finish setting up your account, then sign in.
+          </p>
+        </div>
+
+        <ResendVerification email={state.sent.email} />
+
+        <p className="text-sm text-muted-foreground">
+          <Link href="/login" className="font-medium text-foreground underline">
+            Back to sign in
+          </Link>
+        </p>
+      </div>
+    );
+  }
 
   return (
     <form action={formAction} className="space-y-4">
