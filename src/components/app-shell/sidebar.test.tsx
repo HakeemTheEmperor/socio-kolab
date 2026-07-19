@@ -38,6 +38,7 @@ function render(
         user={user}
         otherClubs={otherClubs}
         pendingCount={0}
+        liaisonPartnerCount={0}
         signOut={signOut}
       />,
     );
