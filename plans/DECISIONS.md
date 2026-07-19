@@ -1305,3 +1305,80 @@ the user has other memberships — so even the single-club menu says something
 useful, which retires the original objection. Creating additional clubs was always
 allowed server-side (`requestClub` has no per-user cap); this only adds the missing
 front door.
+
+# Phase — Elections
+
+Elections was a v1 non-goal (SPEC §1); this phase adds the full lifecycle —
+create → apply → review → vote → results — planned in [ELECTIONS.md](./ELECTIONS.md).
+The load-bearing decisions and their reasons:
+
+## Anonymous ballot: no voter link, and no timestamps on `Vote`
+
+A cast ballot writes two rows in one `$transaction`: a `Vote` (positionId +
+candidacyId + clubId, **no membership**) and a `VoteReceipt` (positionId +
+membershipId). The receipt records *that* you voted; the vote records *what* for;
+nothing joins them. Crucially `Vote` also has **no `createdAt`/`updatedAt`** —
+deliberately breaking the repo-wide timestamp convention — because a
+`Vote.createdAt` would sit microseconds from the same-transaction
+`VoteReceipt.createdAt` and let anyone with DB access re-pair voter to choice by
+sorting on time. Anonymity is a schema property here, not a query-time promise.
+Consequence: votes can't be changed or withdrawn once cast (there is nothing to
+address), which is stated in the ballot UI.
+
+## The receipt's unique index is the one-vote guard
+
+`@@unique([positionId, membershipId])` on `VoteReceipt` is the authority for
+"one vote per member per position". `castVote` validates the candidacy and phase,
+then relies on the constraint (catch `P2002` → "already voted") rather than a
+read-then-write check — two concurrent casts both pass the checks and only the
+index can arbitrate, exactly as the event-registration submit does for duplicates.
+
+## Hybrid lifecycle: president-controlled status × clock-derived phase
+
+`Election.status` (`DRAFT | PUBLISHED | CLOSED | CANCELLED`) is set by the
+president; the fine-grained phase (`scheduled → applications → review → voting →
+closed`) is **derived on read** from four window datetimes while PUBLISHED, by the
+pure `getElectionPhase` in `src/lib/elections.ts`. DRAFT hides the election from
+non-presidents and is the only editable state; CLOSED/CANCELLED override the clock
+so a president can close early or abort. No cron, no scheduled jobs — phase is a
+function of `now`, evaluated wherever it's needed (page, action, tallies route)
+and re-checked server-side in every mutation. Windows must validate in order
+(applications before voting) via cross-field zod refinements.
+
+## One application per (position, member); multi-position allowed
+
+`@@unique([positionId, membershipId])` on `Candidacy`. A member may stand for
+several positions in one election — the president's review is the filter, not the
+schema. A withdrawn application is re-opened to PENDING on re-apply (during the
+applications window) rather than blocked by the unique constraint. Only APPROVED
+candidacies appear on the ballot or in tallies.
+
+## Live results: polled GET route, not `router.refresh()`
+
+Requirement was ≤10s-fresh tallies for all members during voting. There is no
+realtime infra in this codebase and Upstash REST isn't a pub/sub transport, so the
+choice was polling. `router.refresh()` every 7s would re-render the entire RSC
+tree (candidacy joins, membership lookups) just to move a number; instead a GET
+route handler at `elections/[id]/tallies` returns JSON (`vote.groupBy` +
+distinct-receipt turnout through the shared `buildTallies`), and `LiveResults`
+polls it every 7s, pausing while the tab is hidden and stopping once the payload
+reports the election closed (then refreshing into the closed view). The route
+re-runs `requireClubAccess` + a compound `{ id, clubId }` fetch because route
+handlers bypass the `(member)` layout guard — same precedent as the event
+responses CSV route.
+
+## Results CSV mirrors the event-responses export
+
+`elections/[id]/results` is a GET route (native `Content-Disposition` download,
+UTF-8 BOM) reusing `toCsv`/`csvCell` from `event-responses.ts` (formula-injection
+escaping + RFC-4180 already solved there). Results are member-visible, so the gate
+is `election:vote` rather than a manage check, and only a CLOSED election exports.
+
+## President-only management
+
+New actions `election:manage` (PRESIDENT_ONLY), `election:apply` / `election:vote`
+(ALL). Execs are the likely candidates, so keeping the whole election — creation,
+candidate review, close/cancel — with the president avoids the conflict of
+interest of an exec administering their own race. `toLagosDate`/`optionalText`
+were extracted from `validations/events.ts` into `validations/shared.ts` so the
+elections schema reuses the identical Africa/Lagos datetime-local handling.

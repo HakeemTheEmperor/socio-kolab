@@ -18,7 +18,10 @@ vi.mock("@upstash/redis", () => ({
 // The module decides configured-vs-no-op from env *at import time*, so each
 // scenario stubs env, resets the module registry, then imports fresh.
 async function load(configured: boolean) {
-  vi.stubEnv("UPSTASH_REDIS_REST_URL", configured ? "https://example.upstash.io" : "");
+  vi.stubEnv(
+    "UPSTASH_REDIS_REST_URL",
+    configured ? "https://example.upstash.io" : "",
+  );
   vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", configured ? "token" : "");
   vi.resetModules();
   return import("./session-store");

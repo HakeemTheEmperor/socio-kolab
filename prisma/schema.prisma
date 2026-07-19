@@ -40,6 +40,7 @@ model Club {
   memberships Membership[]
   events      Event[]
   dues        DuesRecord[]
+  elections   Election[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -106,9 +107,11 @@ model Membership {
   level      String? // academic year/level, e.g. "300"
   committee  String?
   phone      String?
-  joinedAt   DateTime     @default(now())
-  dues       DuesRecord[]
-  attendance Attendance[]
+  joinedAt     DateTime      @default(now())
+  dues         DuesRecord[]
+  attendance   Attendance[]
+  candidacies  Candidacy[]
+  voteReceipts VoteReceipt[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -190,4 +193,113 @@ model Attendance {
   // independently: one member row per event, one guest row per event+email.
   @@unique([eventId, membershipId])
   @@unique([eventId, guestEmail])
+}
+
+// ---------------------------------------------------------------------------
+// Elections (ELECTIONS.md). Lifecycle is hybrid: `status` is president-
+// controlled (DRAFT/PUBLISHED/CLOSED/CANCELLED); the fine-grained phase
+// (applications/review/voting/…) is derived on read from the four window
+// datetimes while PUBLISHED — see getElectionPhase in src/lib/elections.ts.
+
+enum ElectionStatus {
+  DRAFT // invisible to non-presidents, fully editable
+  PUBLISHED // live; phase follows the clock
+  CLOSED // finalized (possibly early) — overrides the clock
+  CANCELLED // aborted; no results
+}
+
+enum CandidacyStatus {
+  PENDING // applied, awaiting president review
+  APPROVED // on the ballot
+  REJECTED
+  WITHDRAWN // by the applicant; may re-apply while applications are open
+}
+
+model Election {
+  id          String         @id @default(cuid())
+  club        Club           @relation(fields: [clubId], references: [id])
+  clubId      String
+  title       String
+  description String?
+  status      ElectionStatus @default(DRAFT)
+
+  applicationsStartAt DateTime
+  applicationsEndAt   DateTime
+  votingStartAt       DateTime
+  votingEndAt         DateTime
+  closedAt            DateTime? // set on close — audit trail for early closes
+
+  createdById String // membership id of the president (no FK: audit field)
+  positions   Position[]
+  receipts    VoteReceipt[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clubId, status])
+}
+
+model Position {
+  id          String      @id @default(cuid())
+  election    Election    @relation(fields: [electionId], references: [id])
+  electionId  String
+  title       String
+  order       Int         @default(0)
+  candidacies Candidacy[]
+  votes       Vote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([electionId, title])
+}
+
+model Candidacy {
+  id           String          @id @default(cuid())
+  position     Position        @relation(fields: [positionId], references: [id])
+  positionId   String
+  membership   Membership      @relation(fields: [membershipId], references: [id])
+  membershipId String
+  statement    String // manifesto shown on the ballot
+  status       CandidacyStatus @default(PENDING)
+  reviewedById String? // membership id of the reviewing president (no FK)
+  reviewedAt   DateTime?
+  votes        Vote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([positionId, membershipId])
+  @@index([positionId, status])
+}
+
+// Anonymous ballot: NO voter link and — deliberately breaking the repo's
+// createdAt/updatedAt convention — NO timestamps, since a Vote.createdAt would
+// correlate 1:1 with the VoteReceipt written in the same transaction and
+// deanonymize every ballot to anyone with DB access.
+model Vote {
+  id          String    @id @default(cuid())
+  clubId      String // denormalized scope guard for tally queries
+  position    Position  @relation(fields: [positionId], references: [id])
+  positionId  String
+  candidacy   Candidacy @relation(fields: [candidacyId], references: [id])
+  candidacyId String
+
+  @@index([positionId, candidacyId]) // tally groupBy
+}
+
+// Who has voted (not what for). The unique constraint IS the one-vote
+// guarantee — castVote relies on P2002, not a read-then-write check.
+model VoteReceipt {
+  id           String     @id @default(cuid())
+  election     Election   @relation(fields: [electionId], references: [id])
+  electionId   String
+  positionId   String // plain string: uniqueness is the point, not a relation
+  membership   Membership @relation(fields: [membershipId], references: [id])
+  membershipId String
+
+  createdAt DateTime @default(now())
+
+  @@unique([positionId, membershipId])
+  @@index([electionId, membershipId]) // turnout + "positions I've voted in"
 }

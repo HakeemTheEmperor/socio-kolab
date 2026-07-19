@@ -12,7 +12,15 @@ A web portal for managing a single student club (40–200 members), architected 
 - **Execs** (president, secretary, treasurer, etc.) — manage members, record dues, create events, mark attendance.
 - **Members** — view/edit their own profile, see dues status, RSVP to events.
 
-**Non-goals for v1 (do NOT build):** voting/elections, payment gateway integration, file/resource library, notifications/email sending, multi-club onboarding UI, mobile app.
+**Non-goals for v1 (do NOT build):** payment gateway integration, file/resource library, notifications/email sending, mobile app.
+
+> **Post-v1 addition — Elections.** Voting/elections was a v1 non-goal but has
+> since been built (see [ELECTIONS.md](./ELECTIONS.md) and the Elections phase in
+> [DECISIONS.md](./DECISIONS.md)). Presidents create an election listing
+> positions; members apply (with a manifesto) during an applications window; the
+> president approves candidates; members cast **anonymous** ballots during a
+> voting window with live tallies; results are viewable and exportable to CSV.
+> Multi-club onboarding UI and email verification also shipped post-v1.
 
 ---
 
@@ -166,6 +174,9 @@ model Attendance {
 | Create/edit/delete events | ❌ | ✅ | ✅ |
 | RSVP to events | ✅ | ✅ | ✅ |
 | Mark attendance (check-in) | ❌ | ✅ | ✅ |
+| Create/manage elections, review candidates | ❌ | ❌ | ✅ |
+| Apply to stand for a position | ✅ | ✅ | ✅ |
+| Vote / view election results | ✅ | ✅ | ✅ |
 | Edit club settings | ❌ | ❌ | ✅ |
 
 Implement this as a single `can(membership, action)` helper in `lib/permissions.ts` and use it in every server action and in UI conditionals.

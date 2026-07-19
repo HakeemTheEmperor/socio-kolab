@@ -19,6 +19,9 @@ export type Action =
   | "event:manage"
   | "event:rsvp"
   | "event:checkIn"
+  | "election:manage"
+  | "election:apply"
+  | "election:vote"
   | "profile:editOwn"
   | "settings:edit";
 
@@ -37,6 +40,11 @@ const PERMISSIONS: Record<Action, Role[]> = {
   "event:manage": EXECS,
   "event:rsvp": ALL,
   "event:checkIn": EXECS,
+  // Elections are president-run to avoid execs (likely candidates) administering
+  // their own race; any ACTIVE member may stand and vote.
+  "election:manage": PRESIDENT_ONLY,
+  "election:apply": ALL,
+  "election:vote": ALL,
   "profile:editOwn": ALL,
   "settings:edit": PRESIDENT_ONLY,
 };

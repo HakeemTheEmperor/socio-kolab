@@ -119,3 +119,13 @@ export async function requireMemberInClub(clubId: string, membershipId: string) 
   if (!member) notFound();
   return member;
 }
+
+export const findElectionInClub = cache(async (clubId: string, electionId: string) =>
+  prisma.election.findFirst({ where: { id: electionId, clubId } }),
+);
+
+export async function requireElectionInClub(clubId: string, electionId: string) {
+  const election = await findElectionInClub(clubId, electionId);
+  if (!election) notFound();
+  return election;
+}

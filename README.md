@@ -1,7 +1,9 @@
 # Club Portal
 
 A **multi-club** web portal for student clubs — member management, dues tracking
-(record-keeping only, no payment processing), and events with RSVP + attendance.
+(record-keeping only, no payment processing), events with RSVP + attendance, and
+**elections** (positions, candidate applications + review, anonymous voting with
+live tallies, CSV results — see [ELECTIONS.md](./plans/ELECTIONS.md)).
 
 > **Live demo:** [https://sk.toluwalase.me](https://sk.toluwalase.me)
 
@@ -10,8 +12,8 @@ platform-level: one sign-in reaches every club you belong to, and one person can
 be a member of several clubs. Anyone can request a new club; a platform admin
 approves it.
 
-See [SPEC.md](./SPEC.md) for the base specification, [MULTI-CLUB.md](./MULTI-CLUB.md)
-for the multi-club design, and [DECISIONS.md](./DECISIONS.md) for design decisions
+See [SPEC.md](./plans/SPEC.md) for the base specification, [MULTI-CLUB.md](./plans/MULTI-CLUB.md)
+for the multi-club design, and [DECISIONS.md](./plans/DECISIONS.md) for design decisions
 and deviations.
 
 ## URL structure
@@ -26,7 +28,7 @@ and deviations.
 | `/admin` | Platform admins only (404 for everyone else). Approve, reject, suspend clubs. |
 | `/{clubSlug}/register` | Public. Apply to that club. |
 | `/{clubSlug}/events/{id}/register` | Public. Register for that event (see below). |
-| `/{clubSlug}/dashboard`, `/members`, `/dues`, `/events`, `/settings`, `/profile` | Members of that club, with an ACTIVE membership. |
+| `/{clubSlug}/dashboard`, `/members`, `/dues`, `/events`, `/elections`, `/settings`, `/profile` | Members of that club, with an ACTIVE membership. |
 
 Every request re-resolves the club from the slug and verifies the caller's
 membership server-side ([`src/lib/club-context.ts`](./src/lib/club-context.ts)).
@@ -329,6 +331,9 @@ src/
         dashboard/ members/ dues/ settings/ profile/
         events/        # list, detail (RSVP / responses / check-in), form builder
           [id]/responses/       # CSV export route handler
+        elections/     # list, detail (apply / review / ballot / results)
+          [id]/tallies/         # live-tally JSON route (polled during voting)
+          [id]/results/         # results CSV export route handler
   lib/
     prisma.ts          # Prisma client (pg driver adapter)
     verification.ts    # single-use, hashed token lib (email verify + reset)

@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Settings,
   Users,
+  Vote,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -42,6 +43,7 @@ export function navItems(
       ? [{ href: at("/dues"), label: "Dues", icon: Wallet }]
       : []),
     { href: at("/events"), label: "Events", icon: Calendar },
+    { href: at("/elections"), label: "Elections", icon: Vote },
     ...(can(membership, "settings:edit")
       ? [{ href: at("/settings"), label: "Settings", icon: Settings }]
       : []),
@@ -57,6 +59,7 @@ export function pageTitle(pathname: string, clubSlug: string): string {
     members: "Members",
     dues: "Dues",
     events: "Events",
+    elections: "Elections",
     profile: "Profile",
     settings: "Settings",
   };
