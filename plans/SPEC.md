@@ -21,6 +21,11 @@ A web portal for managing a single student club (40–200 members), architected 
 > president approves candidates; members cast **anonymous** ballots during a
 > voting window with live tallies; results are viewable and exportable to CSV.
 > Multi-club onboarding UI and email verification also shipped post-v1.
+>
+> **Post-v1 addition — Partners.** A per-club registry of external partners
+> with a liaison officer (a membership FK) and an append-only interaction log,
+> so partner relationships survive member turnover (see
+> [PARTNERS.md](./PARTNERS.md)).
 
 ---
 
@@ -178,6 +183,9 @@ model Attendance {
 | Create/manage elections, review candidates | ❌ | ❌ | ✅ |
 | Apply to stand for a position | ✅ | ✅ | ✅ |
 | Vote / view election results | ✅ | ✅ | ✅ |
+| View all partners | ❌ | ✅ | ✅ |
+| Create/edit/archive partners, assign liaison | ❌ | ✅ | ✅ |
+| View partners they liaise for + add log entries | liaison only | ✅ | ✅ |
 | Edit club settings | ❌ | ❌ | ✅ |
 
 Implement this as a single `can(membership, action)` helper in `lib/permissions.ts` and use it in every server action and in UI conditionals.
@@ -213,6 +221,16 @@ All pages behind auth except `/login` and `/register`.
 - List of upcoming and past events (tabs). Members can RSVP (going / maybe / not going) on upcoming events.
 - Execs: "Create event" button → dialog (title, description, location, start/end).
 - `/events/[id]` — details, RSVP list grouped by status. Execs get a check-in view: searchable list of ACTIVE members with a check-in toggle per member; RSVP'd members sorted to top.
+
+### `/partners`  (exec, plus liaison-scoped member access — post-v1, see PARTNERS.md)
+- Execs: full registry (name, contact person, liaison, last contact), archived
+  filter, add/edit dialog with a liaison picker, archive/restore, and a
+  "reassign" warning when a liaison is unassigned or no longer ACTIVE.
+- Non-exec members see only the partners they liaise for and can add log
+  entries; any other partner id 404s. With none, `/partners` redirects to the
+  dashboard and no nav item is shown.
+- `/partners/[id]` — contact card + append-only interaction log (author +
+  Africa/Lagos timestamp), newest first; entries cannot be edited or deleted.
 
 ### `/settings` (president-only)
 - Edit club name, dues amount, currency, current period, departments list, committees list.
