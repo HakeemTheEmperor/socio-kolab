@@ -1,9 +1,12 @@
 # Club Portal
 
 A **multi-club** web portal for student clubs — member management, dues tracking
-(record-keeping only, no payment processing), events with RSVP + attendance, and
+(record-keeping only, no payment processing), events with RSVP + attendance,
 **elections** (positions, candidate applications + review, anonymous voting with
-live tallies, CSV results — see [ELECTIONS.md](./plans/ELECTIONS.md)).
+live tallies, CSV results — see [ELECTIONS.md](./plans/ELECTIONS.md)), and a
+**partners** registry (external orgs with a liaison officer and an append-only
+interaction log, so relationships survive the member who holds them — see
+[PARTNERS.md](./plans/PARTNERS.md)).
 
 > **Live demo:** [https://sk.toluwalase.me](https://sk.toluwalase.me)
 
@@ -28,7 +31,7 @@ and deviations.
 | `/admin` | Platform admins only (404 for everyone else). Approve, reject, suspend clubs. |
 | `/{clubSlug}/register` | Public. Apply to that club. |
 | `/{clubSlug}/events/{id}/register` | Public. Register for that event (see below). |
-| `/{clubSlug}/dashboard`, `/members`, `/dues`, `/events`, `/elections`, `/settings`, `/profile` | Members of that club, with an ACTIVE membership. |
+| `/{clubSlug}/dashboard`, `/members`, `/dues`, `/events`, `/elections`, `/partners`, `/settings`, `/profile` | Members of that club, with an ACTIVE membership. |
 
 Every request re-resolves the club from the slug and verifies the caller's
 membership server-side ([`src/lib/club-context.ts`](./src/lib/club-context.ts)).
@@ -135,6 +138,21 @@ member/guest split, a table (one column per field, plus any "(removed field)"
 columns), and a **CSV export**. The CSV opens cleanly in Excel (UTF-8, Africa/Lagos
 timestamps) and is formula-injection–safe — a value like `=1+1` exports inert.
 Guests also appear in the check-in list with a "Guest" badge.
+
+## Partners
+
+A per-club registry of external partners (sponsors, vendors, sister orgs) built
+so the relationship survives the one member who currently holds it. Each partner
+stores contact details, an optional **contact person** at the partner org, and a
+**liaison officer** — a real membership reference, not a name — plus an
+**append-only interaction log** (entries can be added, never edited or deleted).
+
+Who sees what: **execs** manage the full registry (add, edit, archive/restore,
+assign the liaison) and are warned when a partner's liaison is unassigned or no
+longer an active member. A **non-exec member who liaises** for a partner gets a
+Partners nav item, sees exactly their partners, and can add log entries — nothing
+more; every other partner 404s for them. Partners are archived, never deleted;
+an archived partner's log is closed until it is restored.
 
 ## Tech stack
 
@@ -350,6 +368,7 @@ src/
         elections/     # list, detail (apply / review / ballot / results)
           [id]/tallies/         # live-tally JSON route (polled during voting)
           [id]/results/         # results CSV export route handler
+        partners/      # partner registry (exec) + interaction log (exec/liaison)
   lib/
     prisma.ts          # Prisma client (pg driver adapter)
     verification.ts    # single-use, hashed token lib (email verify + reset)

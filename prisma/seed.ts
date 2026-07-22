@@ -32,6 +32,19 @@ interface MemberSeed {
   email?: string;
 }
 
+/** A partner org for the club's registry (PARTNERS.md §7). */
+interface PartnerSeed {
+  name: string;
+  email: string;
+  phone?: string;
+  contactPerson?: string;
+  /** Member name (from `members`) who liaises for this partner. */
+  liaisonName?: string;
+  archived?: boolean;
+  /** Interaction log entries, oldest first. */
+  notes: { authorName: string; body: string; daysAgo: number }[];
+}
+
 interface ClubSeed {
   name: string;
   slug: string;
@@ -41,6 +54,7 @@ interface ClubSeed {
   committees: string[];
   membershipOpen: boolean;
   members: MemberSeed[];
+  partners: PartnerSeed[];
 }
 
 const DEMO_CLUB: ClubSeed = {
@@ -83,6 +97,80 @@ const DEMO_CLUB: ClubSeed = {
     { name: "Zainab Yusuf", role: Role.MEMBER, status: MemberStatus.ACTIVE },
     { name: "Tunde Alabi", role: Role.MEMBER, status: MemberStatus.PENDING },
     { name: "Rita Okon", role: Role.MEMBER, status: MemberStatus.PENDING },
+    // Former liaison — exercises the "liaison inactive, reassign" warning.
+    { name: "Nkechi Obi", role: Role.MEMBER, status: MemberStatus.INACTIVE },
+  ],
+  partners: [
+    {
+      name: "Tech Hub Lagos",
+      email: "hello@techhublagos.test",
+      phone: "080-2000-0001",
+      contactPerson: "Bola Ade",
+      liaisonName: "Kunle Exec",
+      notes: [
+        {
+          authorName: "Kunle Exec",
+          body: "Intro call — open to sponsoring the career workshop.",
+          daysAgo: 40,
+        },
+        {
+          authorName: "Kunle Exec",
+          body: "They confirmed ₦150k sponsorship for the workshop. MOU to follow.",
+          daysAgo: 20,
+        },
+        {
+          authorName: "Amara President",
+          body: "Signed MOU received and filed with the secretary.",
+          daysAgo: 5,
+        },
+      ],
+    },
+    {
+      // Liaised by an ordinary MEMBER — exercises the liaison-only visibility path.
+      name: "Campus Print Co.",
+      email: "orders@campusprint.test",
+      contactPerson: "Mr. Adewale",
+      liaisonName: "Ada Obi",
+      notes: [
+        {
+          authorName: "Kunle Exec",
+          body: "Negotiated 20% member discount on event banners for the session.",
+          daysAgo: 30,
+        },
+        {
+          authorName: "Ada Obi",
+          body: "Picked up the mixer banners — quality good, delivered on time.",
+          daysAgo: 12,
+        },
+      ],
+    },
+    {
+      // Liaison is INACTIVE — the list and detail page should flag a reassign.
+      name: "City Radio 95.1",
+      email: "programs@cityradio.test",
+      contactPerson: "DJ Sammy",
+      liaisonName: "Nkechi Obi",
+      notes: [
+        {
+          authorName: "Nkechi Obi",
+          body: "They ran free promo spots for the welcome mixer.",
+          daysAgo: 60,
+        },
+      ],
+    },
+    {
+      name: "Sunrise Bakery",
+      email: "info@sunrisebakery.test",
+      liaisonName: "Kunle Exec",
+      archived: true,
+      notes: [
+        {
+          authorName: "Kunle Exec",
+          body: "Catering partnership ended — they closed their campus branch.",
+          daysAgo: 90,
+        },
+      ],
+    },
   ],
 };
 
@@ -113,6 +201,22 @@ const BETA_CLUB: ClubSeed = {
     { name: "Uche Nnamdi", role: Role.MEMBER, status: MemberStatus.ACTIVE },
     { name: "Yemi Ojo", role: Role.MEMBER, status: MemberStatus.PENDING },
   ],
+  partners: [
+    // Exercises cross-club isolation: invisible under /demo-club.
+    {
+      name: "Harbor Law Books",
+      email: "sales@harborlaw.test",
+      contactPerson: "Mrs. Bankole",
+      liaisonName: "Dayo Beta",
+      notes: [
+        {
+          authorName: "Dayo Beta",
+          body: "They'll donate past-question compilations for the finals prep.",
+          daysAgo: 15,
+        },
+      ],
+    },
+  ],
 };
 
 function emailFor(name: string): string {
@@ -123,6 +227,13 @@ async function main() {
   const passwordHash = await bcrypt.hash(PASSWORD, 10);
 
   // Fresh, deterministic demo dataset: clear existing rows in FK-safe order.
+  await prisma.partnerNote.deleteMany();
+  await prisma.partner.deleteMany();
+  await prisma.vote.deleteMany();
+  await prisma.voteReceipt.deleteMany();
+  await prisma.candidacy.deleteMany();
+  await prisma.position.deleteMany();
+  await prisma.election.deleteMany();
   await prisma.attendance.deleteMany();
   await prisma.duesRecord.deleteMany();
   await prisma.event.deleteMany();
@@ -176,6 +287,7 @@ async function main() {
     });
 
     const memberships = [];
+    const membershipByName = new Map<string, { id: string }>();
     for (let i = 0; i < cfg.members.length; i++) {
       const spec = cfg.members[i];
       const user = await getOrCreateUser(spec);
@@ -196,6 +308,7 @@ async function main() {
           },
         }),
       );
+      membershipByName.set(spec.name, memberships[memberships.length - 1]);
     }
 
     const exec = memberships.find((m) => m.role === Role.EXEC) ?? memberships[0];
@@ -287,6 +400,41 @@ async function main() {
           rsvp,
           checkedInAt: checkedIn ? new Date(now - 14 * day + 10 * 60 * 1000) : null,
           checkedInById: checkedIn ? exec.id : null,
+        },
+      });
+    }
+
+    // Partners + interaction logs (PARTNERS.md §7). Liaisons and note authors
+    // are resolved by member name within this club.
+    for (const spec of cfg.partners) {
+      const liaison = spec.liaisonName
+        ? membershipByName.get(spec.liaisonName)
+        : undefined;
+      if (spec.liaisonName && !liaison) {
+        throw new Error(`Unknown liaison "${spec.liaisonName}" in ${cfg.name}`);
+      }
+      await prisma.partner.create({
+        data: {
+          clubId: club.id,
+          name: spec.name,
+          email: spec.email,
+          phone: spec.phone ?? null,
+          contactPerson: spec.contactPerson ?? null,
+          liaisonId: liaison?.id ?? null,
+          archivedAt: spec.archived ? new Date(now - 30 * day) : null,
+          notes: {
+            create: spec.notes.map((n) => {
+              const author = membershipByName.get(n.authorName);
+              if (!author) {
+                throw new Error(`Unknown author "${n.authorName}" in ${cfg.name}`);
+              }
+              return {
+                authorId: author.id,
+                body: n.body,
+                createdAt: new Date(now - n.daysAgo * day),
+              };
+            }),
+          },
         },
       });
     }

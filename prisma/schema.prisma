@@ -41,6 +41,7 @@ model Club {
   events      Event[]
   dues        DuesRecord[]
   elections   Election[]
+  partners    Partner[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -120,6 +121,8 @@ model Membership {
   attendance   Attendance[]
   candidacies  Candidacy[]
   voteReceipts VoteReceipt[]
+  liaisonFor   Partner[]     @relation("PartnerLiaison")
+  partnerNotes PartnerNote[] @relation("PartnerNoteAuthor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -294,6 +297,48 @@ model Vote {
   candidacyId String
 
   @@index([positionId, candidacyId]) // tally groupBy
+}
+
+// ---------------------------------------------------------------------------
+// Partners (PARTNERS.md). A club-scoped registry of external partners so the
+// relationship survives the member who currently holds it. The liaison is a
+// real Membership FK (nullable — a partner can exist before a liaison is
+// chosen or after one leaves), which is what lets the UI flag "liaison
+// inactive/unassigned — reassign". Partners are archived, never deleted.
+
+model Partner {
+  id            String      @id @default(cuid())
+  club          Club        @relation(fields: [clubId], references: [id])
+  clubId        String
+  name          String // organization or person
+  email         String
+  phone         String?
+  contactPerson String? // who at the partner org the club talks to
+  liaison       Membership? @relation("PartnerLiaison", fields: [liaisonId], references: [id])
+  liaisonId     String?
+  archivedAt    DateTime?
+  notes         PartnerNote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clubId, archivedAt])
+  @@index([liaisonId])
+}
+
+// Append-only interaction log (no edit/delete actions exist — SPEC §3.5's
+// immutable-history rule). No clubId: a note is only ever reached through its
+// partner, and findPartnerInClub is the club boundary (Attendance precedent).
+model PartnerNote {
+  id        String     @id @default(cuid())
+  partner   Partner    @relation(fields: [partnerId], references: [id])
+  partnerId String
+  author    Membership @relation("PartnerNoteAuthor", fields: [authorId], references: [id])
+  authorId  String
+  body      String
+  createdAt DateTime   @default(now())
+
+  @@index([partnerId, createdAt])
 }
 
 // Who has voted (not what for). The unique constraint IS the one-vote

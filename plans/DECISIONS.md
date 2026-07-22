@@ -1428,3 +1428,50 @@ in this club is reported as skipped, never duplicated. `member:import` is a
 distinct EXEC-level permission rather than an overload of `member:approve`. The
 action re-parses and re-validates the raw text server-side; the client-side
 preview is UX only.
+
+# Partners (PARTNERS.md)
+
+## The liaison is a Membership FK, not free text
+
+The module exists to de-risk "one person holds the relationship"; that only works
+if the app can *see* who the person is. Because `Partner.liaisonId` is a real
+(nullable) FK, the list and detail pages flag "liaison unassigned / no longer
+active — reassign", which is the feature's actual mitigation. Nullable because a
+partner can exist before a liaison is chosen or after one leaves.
+
+## Interaction log, not a mutable notes blob
+
+A single `notes` field becomes one person's scratchpad — the exact failure mode
+being designed against. `PartnerNote` rows are append-only: no edit or delete
+actions exist, matching the immutable-history rule (SPEC §3.5). `PartnerNote`
+carries no `clubId` — it is only ever reached through its partner, and
+`findPartnerInClub` is the club boundary (the `Attendance` precedent); a
+redundant copy would be a second source of truth that could drift.
+
+## Liaison access is ownership-scoped, per the existing "own only" pattern
+
+`partner:view` / `partner:manage` are EXEC-level `can()` actions (nothing is
+president-only: the point is *more* of the exco holding the knowledge). A
+non-exec ACTIVE member's access is the id comparison in `canSeePartner`
+(`permissions.ts`, kept pure there so it unit-tests without the server stack):
+they see exactly the partners where they are the liaison, and can add log
+entries to them. Everything else — edit, archive, reassign, other partners —
+is denied; unauthorized detail-page hits and `addPartnerNote` calls return the
+same 404 / "Partner not found." as a cross-club id, so members can't probe
+which partners exist.
+
+## Archive, never delete — and an archived log is closed
+
+`archivedAt` hides a partner from the default list (execs can filter them back
+in and restore); nothing is deleted. `addPartnerNote` refuses archived partners
+for everyone: the relationship is closed, and restoring is what reopens it.
+Editing is likewise refused until restored. The Partners nav item shows for
+execs always, and for a non-exec only while they liaise for ≥1 non-archived
+partner — the count query runs only for non-execs (the pending-badge precedent).
+
+## Seed clears the election tables (pre-existing bug fix)
+
+Re-running the seed on a database that had election data failed on
+`VoteReceipt_membershipId_fkey`: the FK-safe delete list predates elections and
+was never extended. Vote / VoteReceipt / Candidacy / Position / Election are now
+cleared first, alongside the new PartnerNote / Partner deletes.
