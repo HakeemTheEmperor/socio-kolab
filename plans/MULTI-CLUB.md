@@ -83,7 +83,7 @@ Update signature to `can(membership, action)` operating on the membership resolv
 
 ## 4. Club creation & approval
 
-### 4.1 Request (`/clubs/new`, any signed-in user)
+### 4.1 Request (`/clubs/new`, any signed-in non-admin)
 Form: club name, slug (prefilled via `slugify`, editable, validated live via server action for format + uniqueness), description (optional). Submit → creates Club (status PENDING, `requestedById`) + a Membership for the creator (role PRESIDENT, status ACTIVE — dormant until the club is approved since PENDING clubs resolve as 404). Confirmation screen: "Request submitted — you'll get access once it's approved." The pending request also appears on the user's `/clubs` page as a "pending approval" card.
 
 ### 4.2 Platform admin (`/admin`)
@@ -92,6 +92,13 @@ Form: club name, slug (prefilled via `slugify`, editable, validated live via ser
 - All-clubs table: name, slug, status, member count, created date; action to SUSPEND / reactivate an ACTIVE/SUSPENDED club (confirm dialog).
 - No admin editing of club internals — admins manage club lifecycle, not club data.
 - Seed: set `isPlatformAdmin: true` on a dedicated `admin@platform.test` user (password `password123`), who has no memberships.
+
+### 4.3 Separation of duties (admins are referees, not players)
+A platform admin approves and suspends clubs, so they must stand outside every club they judge. Two invariants, enforced server-side at each mutation that could break them — never in the UI alone:
+- **Admins can't create clubs.** `requestClub` rejects a caller with `isPlatformAdmin` (else they could approve their own request, and the PRESIDENT membership it mints would violate the rule below).
+- **Admins can't hold memberships.** Every path that creates a membership refuses an admin: `joinClubAction` (signed-in self-join) rejects; `importOne` (bulk CSV import) skips the row. `registerAction` needs no guard — it only ever creates a brand-new, non-admin account.
+- Shared check: `isPlatformAdmin(userId)` in `src/lib/admin.ts`, read from the DB per call (never the JWT), so revoking admin takes effect immediately.
+- Consequence: someone who must both operate the platform and belong to a club uses two separate accounts. Dogfooding the member experience as an admin is deliberately given up for a clean separation.
 
 ## 5. Club-scoped registration & the applications toggle
 

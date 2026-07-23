@@ -18,8 +18,8 @@ This repo has some hard-won conventions that differ from common tutorials.
   `src/proxy.ts`, `params`/`searchParams` are Promises, the Prisma client is
   generated to `src/generated/prisma`, shadcn is on Base UI (`render`, not
   `asChild`), and Auth.js config is split edge vs. Node.
-- **[SPEC.md](./SPEC.md)** — what the product is supposed to do.
-- **[DECISIONS.md](./DECISIONS.md)** — why things are the way they are. If a
+- **[SPEC.md](./plans/SPEC.md)** — what the product is supposed to do.
+- **[DECISIONS.md](./plans/DECISIONS.md)** — why things are the way they are. If a
   design looks odd, check here before "fixing" it.
 
 The **golden rule of this codebase**: authorization is the boundary, never the
@@ -143,7 +143,7 @@ This project documents its reasoning, and we'd like to keep it that way:
 
 - **User-facing behaviour changed?** Update the [README](./README.md).
 - **Made a non-obvious design decision or a deliberate trade-off?** Add an
-  entry to [DECISIONS.md](./DECISIONS.md). "I chose X over Y because Z" is
+  entry to [DECISIONS.md](./plans/DECISIONS.md). "I chose X over Y because Z" is
   exactly what belongs there.
 - **New env var?** Document it in the README and add it to `.env.example`.
 

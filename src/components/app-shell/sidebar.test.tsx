@@ -38,6 +38,7 @@ function render(
         user={user}
         otherClubs={otherClubs}
         pendingCount={0}
+        liaisonPartnerCount={0}
         signOut={signOut}
       />,
     );
@@ -49,6 +50,12 @@ function byText(text: string): HTMLElement | undefined {
   return Array.from(
     document.querySelectorAll<HTMLElement>("button, a, [role='menuitem']"),
   ).find((el) => el.textContent?.includes(text));
+}
+
+/** Whether the text appears anywhere in the document — including non-interactive
+ *  nodes like a menu group label, which `byText` deliberately skips. */
+function hasText(text: string): boolean {
+  return document.body.textContent?.includes(text) ?? false;
 }
 
 function click(el: Element) {
@@ -108,18 +115,29 @@ describe("Sidebar user menu", () => {
 });
 
 /**
- * The switcher only becomes a dropdown for a user who belongs to more than one
- * club — with a single club it degrades to a plain link. Every test above passes
- * `otherClubs: []`, so the dropdown branch went unexercised, and it shipped
- * throwing: its label is a Base UI *group part*, which crashes outside a Group.
+ * The switcher is *always* a dropdown (UI-REFACTOR §B2): even with nothing to
+ * switch to it carries "Start a new club" and "All clubs", so the trigger is a
+ * button, never a plain link. The "Switch club" group — with its label, a Base
+ * UI group part that crashes outside a Group — appears only when the user has
+ * other clubs, so both branches are exercised here.
  */
 describe("Sidebar club switcher", () => {
   const beta = { slug: "beta-club", name: "Beta Club", logoUrl: null };
 
-  it("is a plain link to /clubs when there is nothing to switch to", () => {
+  it("is a dropdown trigger (not a link), even with nothing to switch to", () => {
     render(vi.fn());
 
-    expect(byText("Demo Club")?.getAttribute("href")).toBe("/clubs");
+    const trigger = byText("Demo Club");
+    expect(trigger, "switcher trigger").toBeTruthy();
+    expect(trigger!.tagName).toBe("BUTTON");
+    expect(trigger!.getAttribute("href")).toBeNull();
+
+    click(trigger!);
+
+    // No other clubs → no "Switch club" group, just the two standing items.
+    expect(hasText("Switch club"), "no group label without other clubs").toBe(false);
+    expect(byText("Start a new club")?.getAttribute("href")).toBe("/clubs/new");
+    expect(byText("All clubs")?.getAttribute("href")).toBe("/clubs");
   });
 
   it("opens a menu listing the user's other clubs", () => {
@@ -129,7 +147,7 @@ describe("Sidebar club switcher", () => {
     expect(trigger, "switcher trigger").toBeTruthy();
     click(trigger!);
 
-    expect(byText("Switch club"), "the group label renders").toBeTruthy();
+    expect(hasText("Switch club"), "the group label renders").toBe(true);
     const other = byText("Beta Club");
     expect(other, "the other club is listed").toBeTruthy();
     expect(other!.getAttribute("href")).toBe("/beta-club/dashboard");

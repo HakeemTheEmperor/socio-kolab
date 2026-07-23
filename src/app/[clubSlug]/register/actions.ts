@@ -3,14 +3,22 @@
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 
-import { auth, signIn } from "@/auth";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { isPlatformAdmin } from "@/lib/admin";
+import { appUrl } from "@/lib/app-url";
 import { getClubBySlug } from "@/lib/club-context";
 import { getClubSettings } from "@/lib/club";
 import { registerSchema, joinClubSchema } from "@/lib/validations/auth";
+import { createVerificationToken } from "@/lib/verification";
+import { sendVerificationEmail } from "@/lib/email";
 import type { Club } from "@/generated/prisma/client";
 
-export type RegisterState = { error?: string };
+export type RegisterState = {
+  error?: string;
+  /** Set once the account + PENDING membership exist and verification is sent. */
+  sent?: { email: string; clubName: string };
+};
 
 /**
  * Resolve the club an application is being filed against.
@@ -58,12 +66,14 @@ export async function registerAction(
 
   const passwordHash = await bcrypt.hash(password, 10);
 
+  let userId: string;
   try {
-    await prisma.user.create({
+    const user = await prisma.user.create({
       data: {
         email,
         name,
         passwordHash,
+        emailVerified: null,
         memberships: {
           create: {
             clubId: club.id,
@@ -75,15 +85,26 @@ export async function registerAction(
           },
         },
       },
+      select: { id: true },
     });
+    userId = user.id;
   } catch {
     return { error: "Could not create your account. Please try again." };
   }
 
-  // Sign in immediately and land on /clubs, where the new membership appears as
-  // awaiting approval. signIn throws a redirect on success, which must propagate.
-  await signIn("credentials", { email, password, redirectTo: "/clubs" });
-  return {};
+  // Under the hard gate (SIGNUP.MD §5), a brand-new account is unverified and so
+  // must NOT be signed in — that would be a verification bypass (§6). Mail the
+  // verification link instead; the membership is already filed as PENDING.
+  const issued = await createVerificationToken(userId);
+  if (issued.ok) {
+    await sendVerificationEmail(
+      email,
+      name,
+      appUrl(`/verify-email?token=${issued.raw}`),
+    );
+  }
+
+  return { sent: { email, clubName: club.name } };
 }
 
 /**
@@ -97,6 +118,15 @@ export async function joinClubAction(
 ): Promise<RegisterState> {
   const session = await auth();
   if (!session?.user?.id) redirect(`/login`);
+
+  // A platform admin holds no memberships (MULTI-CLUB §4.3): they oversee clubs,
+  // they don't belong to them. Enforced here, not just hidden in the UI.
+  if (await isPlatformAdmin(session.user.id)) {
+    return {
+      error:
+        "Platform admins can't join clubs. Use a separate member account to be a member.",
+    };
+  }
 
   const parsed = joinClubSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {

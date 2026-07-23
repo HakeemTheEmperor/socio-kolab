@@ -1,8 +1,10 @@
 import {
   Calendar,
+  Handshake,
   LayoutDashboard,
   Settings,
   Users,
+  Vote,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -27,6 +29,7 @@ export function navItems(
   clubSlug: string,
   membership: { role: Role; status: MemberStatus },
   pendingCount: number,
+  liaisonPartnerCount: number,
 ): NavItem[] {
   const at = (path: string) => `/${clubSlug}${path}`;
 
@@ -42,6 +45,12 @@ export function navItems(
       ? [{ href: at("/dues"), label: "Dues", icon: Wallet }]
       : []),
     { href: at("/events"), label: "Events", icon: Calendar },
+    { href: at("/elections"), label: "Elections", icon: Vote },
+    // Execs always; a non-exec only while they liaise for ≥1 partner
+    // (PARTNERS.md §6.3) — otherwise the link leads to a redirect.
+    ...(can(membership, "partner:view") || liaisonPartnerCount > 0
+      ? [{ href: at("/partners"), label: "Partners", icon: Handshake }]
+      : []),
     ...(can(membership, "settings:edit")
       ? [{ href: at("/settings"), label: "Settings", icon: Settings }]
       : []),
@@ -57,6 +66,8 @@ export function pageTitle(pathname: string, clubSlug: string): string {
     members: "Members",
     dues: "Dues",
     events: "Events",
+    elections: "Elections",
+    partners: "Partners",
     profile: "Profile",
     settings: "Settings",
   };

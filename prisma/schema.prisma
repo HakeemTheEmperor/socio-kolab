@@ -40,6 +40,8 @@ model Club {
   memberships Membership[]
   events      Event[]
   dues        DuesRecord[]
+  elections   Election[]
+  partners    Partner[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -54,7 +56,36 @@ model User {
   passwordHash       String
   mustChangePassword Boolean @default(false)
   isPlatformAdmin    Boolean @default(false)
-  memberships        Membership[]
+
+  // Email verification (SIGNUP.MD §1). `emailVerified` is a DateTime, not a
+  // boolean — it records *when*, matches the Auth.js convention, and null reads
+  // as "never verified" (the hard gate blocks login while it is null).
+  emailVerified DateTime?
+
+  // One live verification token per user, stored inline (SIGNUP.MD §1.2). The
+  // email carries the raw token; the DB stores only sha256(raw), so a leaked row
+  // cannot verify an account. Issuing a new token overwrites these columns,
+  // which *is* the invalidation of any previous link. All three move together:
+  // set on issue, null on consume.
+  verificationTokenHash   String?   @unique
+  verificationTokenSentAt DateTime?
+  verificationTokenExpiry DateTime?
+
+  // Password reset — a parallel, never-shared token slot (SIGNUP.MD §1.2, §9),
+  // so a verification resend can't kill a pending reset link or vice versa.
+  resetTokenHash   String?   @unique
+  resetTokenSentAt DateTime?
+  resetTokenExpiry DateTime?
+
+  // Member invite — a third never-shared slot for bulk-import onboarding
+  // (BULKUPLOAD.MD §1). An invite sits unopened in an inbox for days, so it lives
+  // 7d (vs verification 24h, reset 1h); a separate slot means a real
+  // password-reset request and a pending invite never clobber each other.
+  inviteTokenHash   String?   @unique
+  inviteTokenSentAt DateTime?
+  inviteTokenExpiry DateTime?
+
+  memberships Membership[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -85,9 +116,13 @@ model Membership {
   level      String? // academic year/level, e.g. "300"
   committee  String?
   phone      String?
-  joinedAt   DateTime     @default(now())
-  dues       DuesRecord[]
-  attendance Attendance[]
+  joinedAt     DateTime      @default(now())
+  dues         DuesRecord[]
+  attendance   Attendance[]
+  candidacies  Candidacy[]
+  voteReceipts VoteReceipt[]
+  liaisonFor   Partner[]     @relation("PartnerLiaison")
+  partnerNotes PartnerNote[] @relation("PartnerNoteAuthor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -169,4 +204,155 @@ model Attendance {
   // independently: one member row per event, one guest row per event+email.
   @@unique([eventId, membershipId])
   @@unique([eventId, guestEmail])
+}
+
+// ---------------------------------------------------------------------------
+// Elections (ELECTIONS.md). Lifecycle is hybrid: `status` is president-
+// controlled (DRAFT/PUBLISHED/CLOSED/CANCELLED); the fine-grained phase
+// (applications/review/voting/…) is derived on read from the four window
+// datetimes while PUBLISHED — see getElectionPhase in src/lib/elections.ts.
+
+enum ElectionStatus {
+  DRAFT // invisible to non-presidents, fully editable
+  PUBLISHED // live; phase follows the clock
+  CLOSED // finalized (possibly early) — overrides the clock
+  CANCELLED // aborted; no results
+}
+
+enum CandidacyStatus {
+  PENDING // applied, awaiting president review
+  APPROVED // on the ballot
+  REJECTED
+  WITHDRAWN // by the applicant; may re-apply while applications are open
+}
+
+model Election {
+  id          String         @id @default(cuid())
+  club        Club           @relation(fields: [clubId], references: [id])
+  clubId      String
+  title       String
+  description String?
+  status      ElectionStatus @default(DRAFT)
+
+  applicationsStartAt DateTime
+  applicationsEndAt   DateTime
+  votingStartAt       DateTime
+  votingEndAt         DateTime
+  closedAt            DateTime? // set on close — audit trail for early closes
+
+  createdById String // membership id of the president (no FK: audit field)
+  positions   Position[]
+  receipts    VoteReceipt[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clubId, status])
+}
+
+model Position {
+  id          String      @id @default(cuid())
+  election    Election    @relation(fields: [electionId], references: [id])
+  electionId  String
+  title       String
+  order       Int         @default(0)
+  candidacies Candidacy[]
+  votes       Vote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([electionId, title])
+}
+
+model Candidacy {
+  id           String          @id @default(cuid())
+  position     Position        @relation(fields: [positionId], references: [id])
+  positionId   String
+  membership   Membership      @relation(fields: [membershipId], references: [id])
+  membershipId String
+  statement    String // manifesto shown on the ballot
+  status       CandidacyStatus @default(PENDING)
+  reviewedById String? // membership id of the reviewing president (no FK)
+  reviewedAt   DateTime?
+  votes        Vote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([positionId, membershipId])
+  @@index([positionId, status])
+}
+
+// Anonymous ballot: NO voter link and — deliberately breaking the repo's
+// createdAt/updatedAt convention — NO timestamps, since a Vote.createdAt would
+// correlate 1:1 with the VoteReceipt written in the same transaction and
+// deanonymize every ballot to anyone with DB access.
+model Vote {
+  id          String    @id @default(cuid())
+  clubId      String // denormalized scope guard for tally queries
+  position    Position  @relation(fields: [positionId], references: [id])
+  positionId  String
+  candidacy   Candidacy @relation(fields: [candidacyId], references: [id])
+  candidacyId String
+
+  @@index([positionId, candidacyId]) // tally groupBy
+}
+
+// ---------------------------------------------------------------------------
+// Partners (PARTNERS.md). A club-scoped registry of external partners so the
+// relationship survives the member who currently holds it. The liaison is a
+// real Membership FK (nullable — a partner can exist before a liaison is
+// chosen or after one leaves), which is what lets the UI flag "liaison
+// inactive/unassigned — reassign". Partners are archived, never deleted.
+
+model Partner {
+  id            String      @id @default(cuid())
+  club          Club        @relation(fields: [clubId], references: [id])
+  clubId        String
+  name          String // organization or person
+  email         String
+  phone         String?
+  contactPerson String? // who at the partner org the club talks to
+  liaison       Membership? @relation("PartnerLiaison", fields: [liaisonId], references: [id])
+  liaisonId     String?
+  archivedAt    DateTime?
+  notes         PartnerNote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clubId, archivedAt])
+  @@index([liaisonId])
+}
+
+// Append-only interaction log (no edit/delete actions exist — SPEC §3.5's
+// immutable-history rule). No clubId: a note is only ever reached through its
+// partner, and findPartnerInClub is the club boundary (Attendance precedent).
+model PartnerNote {
+  id        String     @id @default(cuid())
+  partner   Partner    @relation(fields: [partnerId], references: [id])
+  partnerId String
+  author    Membership @relation("PartnerNoteAuthor", fields: [authorId], references: [id])
+  authorId  String
+  body      String
+  createdAt DateTime   @default(now())
+
+  @@index([partnerId, createdAt])
+}
+
+// Who has voted (not what for). The unique constraint IS the one-vote
+// guarantee — castVote relies on P2002, not a read-then-write check.
+model VoteReceipt {
+  id           String     @id @default(cuid())
+  election     Election   @relation(fields: [electionId], references: [id])
+  electionId   String
+  positionId   String // plain string: uniqueness is the point, not a relation
+  membership   Membership @relation(fields: [membershipId], references: [id])
+  membershipId String
+
+  createdAt DateTime @default(now())
+
+  @@unique([positionId, membershipId])
+  @@index([electionId, membershipId]) // turnout + "positions I've voted in"
 }

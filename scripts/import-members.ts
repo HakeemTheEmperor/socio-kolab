@@ -7,6 +7,7 @@ import {
   MemberStatus,
   Role,
 } from "../src/generated/prisma/client";
+import { parseCsv } from "../src/lib/members-import";
 
 /**
  * Bulk-import members from a CSV with header: name,email,phone,department,level
@@ -31,47 +32,8 @@ const prisma = new PrismaClient({ adapter });
 
 const EXPECTED_HEADER = ["name", "email", "phone", "department", "level"];
 
-/** Minimal RFC-4180-ish CSV parser (handles quoted fields and escaped quotes). */
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let field = "";
-  let row: string[] = [];
-  let inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inQuotes) {
-      if (c === '"') {
-        if (text[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += c;
-      }
-    } else if (c === '"') {
-      inQuotes = true;
-    } else if (c === ",") {
-      row.push(field);
-      field = "";
-    } else if (c === "\n" || c === "\r") {
-      if (c === "\r" && text[i + 1] === "\n") i++;
-      row.push(field);
-      rows.push(row);
-      row = [];
-      field = "";
-    } else {
-      field += c;
-    }
-  }
-  if (field.length > 0 || row.length > 0) {
-    row.push(field);
-    rows.push(row);
-  }
-  // Drop fully-empty trailing rows.
-  return rows.filter((r) => r.some((cell) => cell.trim() !== ""));
-}
+// `parseCsv` (RFC-4180-ish, quoted-field aware) is shared with the in-app bulk
+// upload via src/lib/members-import.ts so the two paths can never diverge.
 
 const USAGE =
   "Usage: npm run import:members -- --club <slug> <path/to/members.csv> [defaultPassword]";
@@ -137,6 +99,9 @@ async function main() {
         name,
         passwordHash,
         mustChangePassword: true,
+        // An operator vouched for this address, so it's pre-verified — imported
+        // members skip the hard gate and go straight to first login (SIGNUP.MD §1.3).
+        emailVerified: new Date(),
       },
     });
     await prisma.membership.create({

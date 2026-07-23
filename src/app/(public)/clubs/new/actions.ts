@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { isPlatformAdmin } from "@/lib/admin";
 import { validateSlug } from "@/lib/slug";
 import { newClubSchema } from "@/lib/validations/club";
 
@@ -31,12 +32,16 @@ export async function checkSlug(slug: string): Promise<SlugCheck> {
 export type NewClubState = { error?: string; submitted?: { name: string } };
 
 /**
- * Request a club. Any signed-in user may ask; a platform admin decides.
+ * Request a club. Any signed-in non-admin may ask; a platform admin decides.
  *
  * The club is created PENDING and the requester gets an ACTIVE PRESIDENT
  * membership straight away. That membership is dormant until approval — a
  * PENDING club resolves as 404 for everyone (`getClubBySlug`) — which means
  * approval is a single status flip rather than a second write that could half-fail.
+ *
+ * A platform admin may not request a club (MULTI-CLUB §4.3): they approve club
+ * requests, so letting them file one would let them approve their own — and the
+ * PRESIDENT membership it mints would itself break "admins hold no memberships".
  */
 export async function requestClub(
   _prevState: NewClubState,
@@ -45,6 +50,12 @@ export async function requestClub(
   const session = await auth();
   if (!session?.user?.id) {
     return { error: "You need to be signed in to start a club." };
+  }
+  if (await isPlatformAdmin(session.user.id)) {
+    return {
+      error:
+        "Platform admins can't create clubs. Use a separate member account to run one.",
+    };
   }
 
   const parsed = newClubSchema.safeParse(Object.fromEntries(formData));

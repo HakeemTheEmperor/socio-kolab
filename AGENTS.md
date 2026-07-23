@@ -6,8 +6,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # Club Portal — project notes
 
-Read [SPEC.md](./SPEC.md) (requirements), [README.md](./README.md) (setup), and
-[DECISIONS.md](./DECISIONS.md) (design decisions) before making changes.
+Read [SPEC.md](./plans/SPEC.md) (requirements), [README.md](./README.md) (setup), and
+[DECISIONS.md](./plans/DECISIONS.md) (design decisions) before making changes.
 
 Stack gotchas that differ from common tutorials:
 

@@ -131,6 +131,7 @@ async function main() {
       email: PRESIDENT.email,
       name: PRESIDENT.name,
       passwordHash,
+      emailVerified: new Date(), // seeded president skips the hard gate (SIGNUP.MD §1.3)
     },
   });
 

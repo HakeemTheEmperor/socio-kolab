@@ -5,6 +5,21 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required."),
 });
 
+// Shared field pieces, so signup and per-club register validate names, emails,
+// and passwords identically (SIGNUP.MD §8).
+const nameField = z
+  .string()
+  .trim()
+  .min(2, "Name must be at least 2 characters.");
+const emailField = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email("Enter a valid email address.");
+const passwordField = z
+  .string()
+  .min(8, "Password must be at least 8 characters.");
+
 const optionalText = z
   .string()
   .trim()
@@ -13,13 +28,47 @@ const optionalText = z
   .transform((v) => (v && v.length > 0 ? v : undefined));
 
 export const registerSchema = z.object({
-  name: z.string().trim().min(2, "Name must be at least 2 characters."),
-  email: z.string().trim().toLowerCase().email("Enter a valid email address."),
-  password: z.string().min(8, "Password must be at least 8 characters."),
+  name: nameField,
+  email: emailField,
+  password: passwordField,
   phone: optionalText,
   department: optionalText,
   level: optionalText,
 });
+
+/**
+ * Standalone platform signup (SIGNUP.MD §4.1, §8) — no club involved. Adds a
+ * confirm-password field over the register fields.
+ */
+export const signupSchema = z
+  .object({
+    name: nameField,
+    email: emailField,
+    password: passwordField,
+    confirmPassword: z.string(),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: "Passwords don't match.",
+    path: ["confirmPassword"],
+  });
+
+/**
+ * A bare email — for resend-verification (SIGNUP.MD §4.1, §4.2) and for starting
+ * a password reset (§9.1). Both take nothing but an address.
+ */
+export const emailOnlySchema = z.object({ email: emailField });
+
+/** Set a new password from a reset link (SIGNUP.MD §9.2). */
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().min(1),
+    password: passwordField,
+    confirmPassword: z.string(),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: "Passwords don't match.",
+    path: ["confirmPassword"],
+  });
 
 /**
  * Applying to a club while already signed in: the account already exists, so

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import {
   Card,
@@ -37,7 +38,11 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <LoginForm />
+            {/* LoginForm reads ?verified=1 / ?reset=1 via useSearchParams, which
+                the App Router requires to sit under a Suspense boundary. */}
+            <Suspense fallback={null}>
+              <LoginForm />
+            </Suspense>
           </CardContent>
         </Card>
       </div>

@@ -19,7 +19,7 @@ export default async function ClubLayout({
   // The switcher lists the user's other live memberships (§B2); the Members badge
   // counts applications waiting on an exec (§B2). Only execs can act on those, so
   // only execs pay for the count.
-  const [otherMemberships, pendingCount] = await Promise.all([
+  const [otherMemberships, pendingCount, liaisonPartnerCount] = await Promise.all([
     prisma.membership.findMany({
       where: {
         userId: membership.userId,
@@ -33,6 +33,13 @@ export default async function ClubLayout({
     can(membership, "member:approve")
       ? prisma.membership.count({ where: { clubId: club.id, status: "PENDING" } })
       : Promise.resolve(0),
+    // Execs see the Partners nav unconditionally, so only non-execs pay for
+    // the liaison count (PARTNERS.md §6.3).
+    can(membership, "partner:view")
+      ? Promise.resolve(0)
+      : prisma.partner.count({
+          where: { clubId: club.id, liaisonId: membership.id, archivedAt: null },
+        }),
   ]);
 
   async function doSignOut() {
@@ -50,6 +57,7 @@ export default async function ClubLayout({
       }}
       otherClubs={otherMemberships.map((m) => m.club)}
       pendingCount={pendingCount}
+      liaisonPartnerCount={liaisonPartnerCount}
       signOut={doSignOut}
       mustChangePassword={membership.user.mustChangePassword}
     >

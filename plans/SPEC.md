@@ -12,7 +12,20 @@ A web portal for managing a single student club (40–200 members), architected 
 - **Execs** (president, secretary, treasurer, etc.) — manage members, record dues, create events, mark attendance.
 - **Members** — view/edit their own profile, see dues status, RSVP to events.
 
-**Non-goals for v1 (do NOT build):** voting/elections, payment gateway integration, file/resource library, notifications/email sending, multi-club onboarding UI, mobile app.
+**Non-goals for v1 (do NOT build):** payment gateway integration, file/resource library, notifications/email sending, mobile app.
+
+> **Post-v1 addition — Elections.** Voting/elections was a v1 non-goal but has
+> since been built (see [ELECTIONS.md](./ELECTIONS.md) and the Elections phase in
+> [DECISIONS.md](./DECISIONS.md)). Presidents create an election listing
+> positions; members apply (with a manifesto) during an applications window; the
+> president approves candidates; members cast **anonymous** ballots during a
+> voting window with live tallies; results are viewable and exportable to CSV.
+> Multi-club onboarding UI and email verification also shipped post-v1.
+>
+> **Post-v1 addition — Partners.** A per-club registry of external partners
+> with a liaison officer (a membership FK) and an append-only interaction log,
+> so partner relationships survive member turnover (see
+> [PARTNERS.md](./PARTNERS.md)).
 
 ---
 
@@ -158,6 +171,7 @@ model Attendance {
 | View full member details (phone, email, dues) | own only | ✅ | ✅ |
 | Edit own profile (phone, dept, level) | ✅ | ✅ | ✅ |
 | Approve/reject pending members | ❌ | ✅ | ✅ |
+| Bulk import members (CSV / paste) | ❌ | ✅ | ✅ |
 | Change member status (active/inactive/alumni) | ❌ | ✅ | ✅ |
 | Change member roles | ❌ | ❌ | ✅ |
 | Record/edit dues payments | ❌ | ✅ | ✅ |
@@ -166,6 +180,12 @@ model Attendance {
 | Create/edit/delete events | ❌ | ✅ | ✅ |
 | RSVP to events | ✅ | ✅ | ✅ |
 | Mark attendance (check-in) | ❌ | ✅ | ✅ |
+| Create/manage elections, review candidates | ❌ | ❌ | ✅ |
+| Apply to stand for a position | ✅ | ✅ | ✅ |
+| Vote / view election results | ✅ | ✅ | ✅ |
+| View all partners | ❌ | ✅ | ✅ |
+| Create/edit/archive partners, assign liaison | ❌ | ✅ | ✅ |
+| View partners they liaise for + add log entries | liaison only | ✅ | ✅ |
 | Edit club settings | ❌ | ❌ | ✅ |
 
 Implement this as a single `can(membership, action)` helper in `lib/permissions.ts` and use it in every server action and in UI conditionals.
@@ -188,6 +208,7 @@ All pages behind auth except `/login` and `/register`.
 ### `/members`
 - Table: name, department, level, committee, status. Search by name; filter by status, department, committee.
 - Execs see extra columns (email, phone, dues status) and a pending-approvals section at top with Approve/Reject buttons.
+- Execs get an "Import members" action (topbar) → dialog accepting a CSV upload or pasted `name,email,phone,department,level` rows, with a validated preview. Each new account is created ACTIVE and emailed a single-use invite link to set its own password (no password is generated or shared). See [BULKUPLOAD.MD](./BULKUPLOAD.MD).
 - Row click → `/members/[id]` detail page: profile info, dues history, attendance history. Execs can edit status/committee; president can edit role.
 
 ### `/dues`  (exec-only)
@@ -200,6 +221,16 @@ All pages behind auth except `/login` and `/register`.
 - List of upcoming and past events (tabs). Members can RSVP (going / maybe / not going) on upcoming events.
 - Execs: "Create event" button → dialog (title, description, location, start/end).
 - `/events/[id]` — details, RSVP list grouped by status. Execs get a check-in view: searchable list of ACTIVE members with a check-in toggle per member; RSVP'd members sorted to top.
+
+### `/partners`  (exec, plus liaison-scoped member access — post-v1, see PARTNERS.md)
+- Execs: full registry (name, contact person, liaison, last contact), archived
+  filter, add/edit dialog with a liaison picker, archive/restore, and a
+  "reassign" warning when a liaison is unassigned or no longer ACTIVE.
+- Non-exec members see only the partners they liaise for and can add log
+  entries; any other partner id 404s. With none, `/partners` redirects to the
+  dashboard and no nav item is shown.
+- `/partners/[id]` — contact card + append-only interaction log (author +
+  Africa/Lagos timestamp), newest first; entries cannot be edited or deleted.
 
 ### `/settings` (president-only)
 - Edit club name, dues amount, currency, current period, departments list, committees list.

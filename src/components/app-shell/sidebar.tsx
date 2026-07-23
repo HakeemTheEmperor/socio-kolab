@@ -44,6 +44,8 @@ export type SidebarProps = {
   /** The user's other ACTIVE memberships, for the switcher dropdown. */
   otherClubs: ShellClub[];
   pendingCount: number;
+  /** Non-exec: how many partners this member liaises for (shows the nav item). */
+  liaisonPartnerCount: number;
   signOut: () => Promise<void>;
   /** Mobile: close the slide-over after navigating (UI-REFACTOR §B3). */
   onNavigate?: () => void;
@@ -234,11 +236,12 @@ export function Sidebar({
   user,
   otherClubs,
   pendingCount,
+  liaisonPartnerCount,
   signOut,
   onNavigate,
 }: SidebarProps) {
   const pathname = usePathname();
-  const items = navItems(club.slug, user, pendingCount);
+  const items = navItems(club.slug, user, pendingCount, liaisonPartnerCount);
 
   return (
     <div className="flex h-full flex-col gap-2 bg-surface p-3">

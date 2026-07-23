@@ -1,7 +1,12 @@
 # Club Portal
 
 A **multi-club** web portal for student clubs — member management, dues tracking
-(record-keeping only, no payment processing), and events with RSVP + attendance.
+(record-keeping only, no payment processing), events with RSVP + attendance,
+**elections** (positions, candidate applications + review, anonymous voting with
+live tallies, CSV results — see [ELECTIONS.md](./plans/ELECTIONS.md)), and a
+**partners** registry (external orgs with a liaison officer and an append-only
+interaction log, so relationships survive the member who holds them — see
+[PARTNERS.md](./plans/PARTNERS.md)).
 
 > **Live demo:** [https://sk.toluwalase.me](https://sk.toluwalase.me)
 
@@ -10,8 +15,8 @@ platform-level: one sign-in reaches every club you belong to, and one person can
 be a member of several clubs. Anyone can request a new club; a platform admin
 approves it.
 
-See [SPEC.md](./SPEC.md) for the base specification, [MULTI-CLUB.md](./MULTI-CLUB.md)
-for the multi-club design, and [DECISIONS.md](./DECISIONS.md) for design decisions
+See [SPEC.md](./plans/SPEC.md) for the base specification, [MULTI-CLUB.md](./plans/MULTI-CLUB.md)
+for the multi-club design, and [DECISIONS.md](./plans/DECISIONS.md) for design decisions
 and deviations.
 
 ## URL structure
@@ -19,16 +24,42 @@ and deviations.
 | Route | Who |
 |---|---|
 | `/login` | Everyone. Global — accounts are not per-club. |
+| `/signup` | Public. Create a platform account (email verification required). |
+| `/verify-email`, `/forgot-password`, `/reset-password` | Public. Email-verification and password-reset link targets. |
 | `/clubs` | Signed in. Your clubs. Auto-forwards if you have exactly one and nothing pending. |
 | `/clubs/new` | Signed in. Request a new club. |
 | `/admin` | Platform admins only (404 for everyone else). Approve, reject, suspend clubs. |
 | `/{clubSlug}/register` | Public. Apply to that club. |
 | `/{clubSlug}/events/{id}/register` | Public. Register for that event (see below). |
-| `/{clubSlug}/dashboard`, `/members`, `/dues`, `/events`, `/settings`, `/profile` | Members of that club, with an ACTIVE membership. |
+| `/{clubSlug}/dashboard`, `/members`, `/dues`, `/events`, `/elections`, `/partners`, `/settings`, `/profile` | Members of that club, with an ACTIVE membership. |
 
 Every request re-resolves the club from the slug and verifies the caller's
 membership server-side ([`src/lib/club-context.ts`](./src/lib/club-context.ts)).
 An id from one club never resolves under another club's slug — it 404s.
+
+## Accounts, email verification & password reset
+
+Accounts are created at `/signup` (or by applying to a club at
+`/{clubSlug}/register`). Both send a verification email and do **not** sign the
+new user in.
+
+- **Hard-gate verification.** An unverified account cannot sign in at all — the
+  gate lives in `authorize()`, so an unverified user never even mints a session.
+  Clicking the emailed link verifies the account and sends them to sign in.
+  Seeded, imported, and pre-existing accounts are backfilled as verified, so the
+  gate never locks them out.
+- **Password reset.** `/forgot-password` mails a 1-hour link (and never reveals
+  whether an address has an account); `/reset-password` sets the new password.
+  A completed reset also verifies the email, so it doubles as a recovery path for
+  an unverified account.
+- **Session revocation.** JWT sessions are paired with a server-side session id
+  in Redis (Upstash), checked on every request. Logging in on a new device
+  supersedes the old session; logout and a password reset revoke it immediately.
+  Tokens are single-use and stored only as SHA-256 hashes; verification and reset
+  use separate token slots.
+
+Verification/reset email and session revocation both degrade gracefully with no
+external services configured — see the environment table below.
 
 ## Club lifecycle
 
@@ -108,11 +139,29 @@ columns), and a **CSV export**. The CSV opens cleanly in Excel (UTF-8, Africa/La
 timestamps) and is formula-injection–safe — a value like `=1+1` exports inert.
 Guests also appear in the check-in list with a "Guest" badge.
 
+## Partners
+
+A per-club registry of external partners (sponsors, vendors, sister orgs) built
+so the relationship survives the one member who currently holds it. Each partner
+stores contact details, an optional **contact person** at the partner org, and a
+**liaison officer** — a real membership reference, not a name — plus an
+**append-only interaction log** (entries can be added, never edited or deleted).
+
+Who sees what: **execs** manage the full registry (add, edit, archive/restore,
+assign the liaison) and are warned when a partner's liaison is unassigned or no
+longer an active member. A **non-exec member who liaises** for a partner gets a
+Partners nav item, sees exactly their partners, and can add log entries — nothing
+more; every other partner 404s for them. Partners are archived, never deleted;
+an archived partner's log is closed until it is restored.
+
 ## Tech stack
 
 - **Next.js 16** (App Router, TypeScript strict, Server Actions for all mutations)
 - **PostgreSQL** + **Prisma 7** (driver adapter `@prisma/adapter-pg`)
-- **Auth.js (NextAuth v5)** — Credentials provider, JWT sessions, bcrypt hashing
+- **Auth.js (NextAuth v5)** — Credentials provider, JWT sessions, bcrypt hashing,
+  hard-gate email verification + password reset, Redis-backed session revocation
+- **Resend** for transactional email (console fallback in dev), **Upstash Redis**
+  for the session allowlist
 - **Tailwind CSS v4** + **shadcn/ui** (Base UI primitives)
 - **Zod** for all input validation
 
@@ -130,6 +179,16 @@ them in:
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string, used by the app at runtime. On Supabase, the **pooled** URL — see below. |
 | `AUTH_SECRET` | Secret for Auth.js JWT/session signing. Generate with `npx auth secret` or `openssl rand -base64 32`. |
+
+Email and session revocation are optional locally — each degrades gracefully
+when unset, so nothing below is required for development:
+
+| Variable | Description |
+|---|---|
+| `APP_URL` | Public origin used to build absolute links in emails. Defaults to `http://localhost:3000`. **Set it in every deployed environment.** |
+| `RESEND_API_KEY` | Resend API key for sending verification/reset email. **Unset → console mode**: the link is logged to the server console instead of sent, so dev/CI need no mail provider. |
+| `EMAIL_FROM` | Sender for those emails, e.g. `Club Portal <noreply@yourdomain>`. The domain must be verified in Resend (SPF/DKIM). Required only when `RESEND_API_KEY` is set. |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis (REST) for the JWT session allowlist. **Both unset → the revocation check is a no-op** (every session treated as valid). Set both to enable logout/reset revocation and one-session-per-user. |
 
 Two more exist for Supabase only. Leave them unset locally and nothing changes:
 
@@ -199,10 +258,26 @@ straight to that club's dashboard; `ada.obi@club.test` lands on `/clubs` and pic
 > The seed clears existing data first for a deterministic dataset — do not run it
 > against a database with real data.
 
-## Bulk-importing members (CSV)
+## Bulk-importing members
 
-Import members from a CSV with header `name,email,phone,department,level`. The
-club is named by slug and is **required** — there is no "current" club:
+There are two ways to add members in bulk. Both accept the columns
+`name,email,phone,department,level` and create ACTIVE memberships; an existing
+user just gains a membership in the club (no duplicate, no password change).
+
+### In-app (execs) — invite links
+
+On `/{clubSlug}/members`, execs get an **Import members** action: upload a CSV or
+paste rows, review the validated preview, and import. Each **new** account is
+emailed a single-use link to set its own password — no password is generated or
+shared. The link (`/accept-invite?token=…`) verifies the address and sets the
+password in one step; it expires after 7 days. This needs the email env vars
+(`RESEND_API_KEY`, `EMAIL_FROM`, `APP_URL`); without `RESEND_API_KEY` the link is
+logged to the server console (dev mode). See [BULKUPLOAD.MD](./plans/BULKUPLOAD.MD).
+
+### CLI (operator) — default password
+
+For operator-run onboarding, the CLI importer sets a shared default password
+instead of emailing invites. The club is named by slug and is **required**:
 
 ```bash
 npm run import:members -- --club <slug> path/to/members.csv [defaultPassword]
@@ -235,6 +310,9 @@ npm run import:members -- --club demo-club scripts/members.sample.csv
    | `DIRECT_URL` | **Direct connection** (port 5432) — migrations only |
    | `IS_SUPABASE` | `true` |
    | `AUTH_SECRET` | `npx auth secret` |
+   | `APP_URL` | The deployed origin, e.g. `https://your-app.vercel.app` — builds email links |
+   | `RESEND_API_KEY`, `EMAIL_FROM` | Resend key + verified sender, so verification/reset email actually sends |
+   | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis, to enable session revocation |
 
 4. Deploy. `postinstall` runs `prisma generate`; run `npm run db:deploy`
    (`prisma migrate deploy`) against the production database as part of your
@@ -268,12 +346,15 @@ prisma/
 scripts/
   import-members.ts    # CSV importer (--club <slug>)
 src/
-  auth.config.ts       # edge-safe Auth.js config (used by proxy)
-  auth.ts              # Auth.js instance (Credentials + Prisma + bcrypt)
+  auth.config.ts       # edge-safe Auth.js config (proxy + JWT session allowlist)
+  auth.ts              # Auth.js instance (Credentials + Prisma + bcrypt + hard gate)
   proxy.ts             # route protection (Next 16 middleware)
   app/
     (public)/
       login/           # global sign-in
+      signup/          # create a platform account (+ resend verification)
+      verify-email/    # verification link target
+      forgot-password/ reset-password/   # password-reset request + link target
       clubs/           # club switcher + /clubs/new (request a club)
     admin/             # platform admin (club lifecycle only)
     [clubSlug]/
@@ -284,8 +365,16 @@ src/
         dashboard/ members/ dues/ settings/ profile/
         events/        # list, detail (RSVP / responses / check-in), form builder
           [id]/responses/       # CSV export route handler
+        elections/     # list, detail (apply / review / ballot / results)
+          [id]/tallies/         # live-tally JSON route (polled during voting)
+          [id]/results/         # results CSV export route handler
+        partners/      # partner registry (exec) + interaction log (exec/liaison)
   lib/
     prisma.ts          # Prisma client (pg driver adapter)
+    verification.ts    # single-use, hashed token lib (email verify + reset)
+    email.ts           # Resend sender (console fallback in dev)
+    session-store.ts   # Upstash Redis JWT session allowlist (revocation)
+    app-url.ts         # absolute-URL builder for email links (APP_URL)
     club-context.ts    # getClubBySlug / requireClubAccess / cross-club guards
     club.ts            # club settings parsing
     admin.ts           # requirePlatformAdmin

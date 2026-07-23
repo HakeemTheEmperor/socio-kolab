@@ -39,11 +39,22 @@ export default async function ClubsPage({
   // PENDING clubs are included so a user's own club request shows up here.
   // REJECTED and SUSPENDED clubs are not: to their members they are simply gone,
   // exactly as they are to the router (getClubBySlug 404s them).
-  const memberships = await prisma.membership.findMany({
-    where: { userId: session.user.id, club: { status: { in: ["ACTIVE", "PENDING"] } } },
-    include: { club: true },
-    orderBy: { club: { name: "asc" } },
-  });
+  //
+  // `isPlatformAdmin` decides whether this page offers a way into /admin — the
+  // admin area is otherwise unlinked, so a pure admin lands here with nothing to
+  // do. Read fresh from the DB, never the JWT (mirrors requirePlatformAdmin).
+  const [user, memberships] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { isPlatformAdmin: true },
+    }),
+    prisma.membership.findMany({
+      where: { userId: session.user.id, club: { status: { in: ["ACTIVE", "PENDING"] } } },
+      include: { club: true },
+      orderBy: { club: { name: "asc" } },
+    }),
+  ]);
+  const isPlatformAdmin = user?.isPlatformAdmin ?? false;
 
   // Somewhere to go: an active membership in a club that is actually live.
   const live = memberships.filter(
@@ -64,6 +75,15 @@ export default async function ClubsPage({
   // is still pending, or the user would never see that it is.
   if (!error && live.length === 1 && waiting.length === 0) {
     redirect(`/${live[0].club.slug}/dashboard`);
+  }
+
+  // A platform admin with nothing club-side to show would otherwise be stranded
+  // on an empty switcher — send them straight to /admin. Only when there's
+  // nothing to enter, nothing to await, and nothing to explain (?error=…). An
+  // admin who *also* belongs to a club still gets the switcher, with the Admin
+  // link in the footer as the way across.
+  if (!error && isPlatformAdmin && live.length === 0 && waiting.length === 0) {
+    redirect("/admin");
   }
 
   async function doSignOut() {
@@ -155,13 +175,25 @@ export default async function ClubsPage({
       )}
 
       <div className="mt-8 flex items-center justify-between border-t pt-6">
-        {memberships.length > 0 ? (
-          <Link
-            href="/clubs/new"
-            className="text-sm font-medium underline underline-offset-4"
-          >
-            Start a new club
-          </Link>
+        {memberships.length > 0 || isPlatformAdmin ? (
+          <div className="flex items-center gap-4">
+            {memberships.length > 0 ? (
+              <Link
+                href="/clubs/new"
+                className="text-sm font-medium underline underline-offset-4"
+              >
+                Start a new club
+              </Link>
+            ) : null}
+            {isPlatformAdmin ? (
+              <Link
+                href="/admin"
+                className="text-sm font-medium underline underline-offset-4"
+              >
+                Admin dashboard
+              </Link>
+            ) : null}
+          </div>
         ) : (
           <span />
         )}

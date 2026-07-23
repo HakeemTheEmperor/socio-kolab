@@ -119,3 +119,26 @@ export async function requireMemberInClub(clubId: string, membershipId: string) 
   if (!member) notFound();
   return member;
 }
+
+export const findElectionInClub = cache(async (clubId: string, electionId: string) =>
+  prisma.election.findFirst({ where: { id: electionId, clubId } }),
+);
+
+export async function requireElectionInClub(clubId: string, electionId: string) {
+  const election = await findElectionInClub(clubId, electionId);
+  if (!election) notFound();
+  return election;
+}
+
+export const findPartnerInClub = cache(async (clubId: string, partnerId: string) =>
+  prisma.partner.findFirst({
+    where: { id: partnerId, clubId },
+    include: { liaison: { include: { user: true } } },
+  }),
+);
+
+export async function requirePartnerInClub(clubId: string, partnerId: string) {
+  const partner = await findPartnerInClub(clubId, partnerId);
+  if (!partner) notFound();
+  return partner;
+}
