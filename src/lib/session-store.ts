@@ -4,7 +4,7 @@ import { Redis } from "@upstash/redis";
  * Redis-backed session allowlist for JWT revocation (SIGNUP.MD §10).
  *
  * Stateless JWTs can't be revoked before they expire, so each JWT is paired
- * with a server-side session id (`jti`) kept here and checked on every request.
+ * with a server-side session id (`sid`) kept here and checked on every request.
  * Deleting the key kills the session immediately.
  *
  * **Edge-safe by construction** (SIGNUP.MD §10.2): this runs inside the proxy's
@@ -37,10 +37,10 @@ const warn = (op: string, error: unknown) =>
   console.error(`[session-store] ${op} failed — failing open:`, error);
 
 /** Register a freshly issued session id for a user (called on sign-in). */
-export async function setSession(userId: string, jti: string): Promise<void> {
+export async function setSession(userId: string, sid: string): Promise<void> {
   if (!redis) return;
   try {
-    await redis.set(key(userId), jti, { ex: SESSION_TTL_SECONDS });
+    await redis.set(key(userId), sid, { ex: SESSION_TTL_SECONDS });
   } catch (error) {
     warn("setSession", error);
   }
@@ -61,19 +61,19 @@ export async function clearSession(userId: string): Promise<void> {
  * request from the `jwt` callback.
  *
  *  - No store configured → always valid (revocation disabled in dev/CI).
- *  - Store configured but the token carries no `jti` (a session predating this
+ *  - Store configured but the token carries no `sid` (a session predating this
  *    feature) → invalid, forcing a one-time re-login.
  *  - Redis throws → valid (fail-open, §10.3).
  */
 export async function isSessionValid(
   userId: string,
-  jti: string | undefined,
+  sid: string | undefined,
 ): Promise<boolean> {
   if (!redis) return true;
-  if (!jti) return false;
+  if (!sid) return false;
   try {
     const stored = await redis.get<string>(key(userId));
-    return stored === jti;
+    return stored === sid;
   } catch (error) {
     warn("isSessionValid", error);
     return true;

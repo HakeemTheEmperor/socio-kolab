@@ -26,3 +26,20 @@ export const requirePlatformAdmin = cache(async () => {
 
   return user;
 });
+
+/**
+ * Is this user a platform admin? Used to enforce the separation-of-duties rules
+ * (MULTI-CLUB §4.3): a platform admin — the referee who approves and suspends
+ * clubs — may neither create a club nor hold a membership in one. The guards
+ * live in the mutation actions that could otherwise cross that line
+ * (`requestClub`, `joinClubAction`, `importOne`); this is their shared check.
+ *
+ * Read from the DB, never the JWT, so revoking admin takes effect at once.
+ */
+export async function isPlatformAdmin(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isPlatformAdmin: true },
+  });
+  return user?.isPlatformAdmin ?? false;
+}

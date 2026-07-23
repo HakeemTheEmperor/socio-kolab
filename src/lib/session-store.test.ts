@@ -39,9 +39,9 @@ afterEach(() => {
 describe("no-op mode (Upstash env unset)", () => {
   it("reports every session valid and never touches Redis", async () => {
     const store = await load(false);
-    expect(await store.isSessionValid("u1", "jti")).toBe(true);
+    expect(await store.isSessionValid("u1", "sid")).toBe(true);
     expect(await store.isSessionValid("u1", undefined)).toBe(true);
-    await store.setSession("u1", "jti");
+    await store.setSession("u1", "sid");
     await store.clearSession("u1");
     expect(get).not.toHaveBeenCalled();
     expect(set).not.toHaveBeenCalled();
@@ -52,23 +52,23 @@ describe("no-op mode (Upstash env unset)", () => {
 describe("configured mode", () => {
   it("is valid only when the stored session id matches the token's", async () => {
     const store = await load(true);
-    get.mockResolvedValue("jti-1");
-    expect(await store.isSessionValid("u1", "jti-1")).toBe(true);
+    get.mockResolvedValue("sid-1");
+    expect(await store.isSessionValid("u1", "sid-1")).toBe(true);
   });
 
   it("is invalid when the stored id differs (superseded by a newer login)", async () => {
     const store = await load(true);
-    get.mockResolvedValue("jti-new");
-    expect(await store.isSessionValid("u1", "jti-old")).toBe(false);
+    get.mockResolvedValue("sid-new");
+    expect(await store.isSessionValid("u1", "sid-old")).toBe(false);
   });
 
   it("is invalid when the key is gone (logged out / expired)", async () => {
     const store = await load(true);
     get.mockResolvedValue(null);
-    expect(await store.isSessionValid("u1", "jti-1")).toBe(false);
+    expect(await store.isSessionValid("u1", "sid-1")).toBe(false);
   });
 
-  it("rejects a token with no jti (session predating the allowlist)", async () => {
+  it("rejects a token with no sid (session predating the allowlist)", async () => {
     const store = await load(true);
     expect(await store.isSessionValid("u1", undefined)).toBe(false);
     expect(get).not.toHaveBeenCalled();
@@ -77,14 +77,14 @@ describe("configured mode", () => {
   it("fails OPEN when Redis throws, and logs it", async () => {
     const store = await load(true);
     get.mockRejectedValue(new Error("upstash down"));
-    expect(await store.isSessionValid("u1", "jti-1")).toBe(true);
+    expect(await store.isSessionValid("u1", "sid-1")).toBe(true);
     expect(console.error).toHaveBeenCalled();
   });
 
   it("setSession writes the id under the per-user key with a TTL", async () => {
     const store = await load(true);
-    await store.setSession("u1", "jti-1");
-    expect(set).toHaveBeenCalledWith("user_token:u1", "jti-1", {
+    await store.setSession("u1", "sid-1");
+    expect(set).toHaveBeenCalledWith("user_token:u1", "sid-1", {
       ex: 30 * 24 * 60 * 60,
     });
   });

@@ -77,14 +77,19 @@ export const authConfig = {
       if (user) {
         // Sign-in: a fresh session id, stamped on the JWT and recorded in Redis.
         // One key per user means this login supersedes any prior device (§10.1).
-        const jti = globalThis.crypto.randomUUID();
-        token.jti = jti;
-        if (token.sub) await setSession(token.sub, jti);
+        //
+        // The claim is `sid`, not `jti`: `@auth/core`'s encode unconditionally
+        // calls `.setJti(crypto.randomUUID())` after this callback runs, so a
+        // `jti` set here is overwritten before the cookie is ever written — the
+        // stored id could never match on the next request.
+        const sid = globalThis.crypto.randomUUID();
+        token.sid = sid;
+        if (token.sub) await setSession(token.sub, sid);
         return token;
       }
       // Subsequent requests: a revoked (or superseded) session no longer matches
       // its Redis entry — drop it, and Auth.js treats the caller as signed out.
-      if (token.sub && !(await isSessionValid(token.sub, token.jti))) {
+      if (token.sub && !(await isSessionValid(token.sub, token.sid))) {
         return null;
       }
       return token;

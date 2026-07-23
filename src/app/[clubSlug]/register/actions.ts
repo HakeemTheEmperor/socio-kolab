@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { isPlatformAdmin } from "@/lib/admin";
 import { appUrl } from "@/lib/app-url";
 import { getClubBySlug } from "@/lib/club-context";
 import { getClubSettings } from "@/lib/club";
@@ -117,6 +118,15 @@ export async function joinClubAction(
 ): Promise<RegisterState> {
   const session = await auth();
   if (!session?.user?.id) redirect(`/login`);
+
+  // A platform admin holds no memberships (MULTI-CLUB §4.3): they oversee clubs,
+  // they don't belong to them. Enforced here, not just hidden in the UI.
+  if (await isPlatformAdmin(session.user.id)) {
+    return {
+      error:
+        "Platform admins can't join clubs. Use a separate member account to be a member.",
+    };
+  }
 
   const parsed = joinClubSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {

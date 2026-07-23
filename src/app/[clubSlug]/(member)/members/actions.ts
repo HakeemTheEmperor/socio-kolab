@@ -323,10 +323,16 @@ async function importOne(
 ): Promise<ImportOutcome> {
   const existing = await prisma.user.findUnique({
     where: { email: data.email },
-    select: { id: true, name: true, mustChangePassword: true },
+    select: { id: true, name: true, mustChangePassword: true, isPlatformAdmin: true },
   });
 
   if (existing) {
+    // A platform admin holds no memberships (MULTI-CLUB §4.3). A CSV must not be
+    // able to smuggle one in — skip the row rather than fail the whole import.
+    if (existing.isPlatformAdmin) {
+      return { kind: "skipped", reason: "Platform admins can't be club members." };
+    }
+
     const membership = await prisma.membership.findUnique({
       where: { clubId_userId: { clubId, userId: existing.id } },
       select: { id: true },

@@ -1246,12 +1246,18 @@ No SDK dependency — `sendEmail` POSTs to Resend's REST API directly. With
 never require a mail provider (mirrors the no-op session store).
 
 ### Session revocation: Redis allowlist, one session per user, fail-open
-Stateless JWTs can't be revoked, so each JWT carries a `jti` recorded in Upstash
-Redis under **one key per user** (`user_token:${userId}`), checked in the `jwt`
-callback on every request. Consequences, all deliberate:
+Stateless JWTs can't be revoked, so each JWT carries a session id recorded in
+Upstash Redis under **one key per user** (`user_token:${userId}`), checked in the
+`jwt` callback on every request. Consequences, all deliberate:
+- **The claim is `sid`, never `jti`** — `@auth/core`'s `encode` ends with
+  `.setJti(crypto.randomUUID())`, which overwrites whatever the `jwt` callback
+  put in `jti` *before the cookie is written*. An allowlist keyed on `jti`
+  therefore never matches on the next request: every login succeeds and is
+  bounced straight back to `/login`. `jti` is Auth.js's claim; we stay off it.
+  Guarded by a round-trip encode/decode test in `src/auth.config.test.ts`.
 - **One session per user** — a new login overwrites the key, so signing in on a
   second device logs out the first. If multi-device is ever wanted, the key flips
-  to per-session (`session:${jti}`) with no change to the JWT shape.
+  to per-session (`session:${sid}`) with no change to the JWT shape.
 - **Edge-safe client** — the check runs in the proxy (edge runtime), so it uses
   `@upstash/redis` (REST/fetch); `ioredis`/`node-redis` (raw TCP) would not run
   there. `src/lib/session-store.ts` imports no Prisma/bcrypt, the same rule
