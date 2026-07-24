@@ -1481,3 +1481,62 @@ Re-running the seed on a database that had election data failed on
 `VoteReceipt_membershipId_fkey`: the FK-safe delete list predates elections and
 was never extended. Vote / VoteReceipt / Candidacy / Position / Election are now
 cleared first, alongside the new PartnerNote / Partner deletes.
+
+## Phase — Admin portal (Overview, Clubs, Users)
+
+The single-page `/admin` grew into a three-section platform-operator portal
+(Overview / Clubs / Users). The decisions below are from `plans/ADMIN.md`.
+
+### Admins gain a role lever, not a data lever
+The new Users view is read-only except for one write: toggling
+`User.isPlatformAdmin`. Admins still cannot see or edit any club's members,
+dues, events, or settings — the "referees, not players" line (MULTI-CLUB §4.3)
+holds. What changes is that the *referee bench* is now managed from the UI
+instead of the seed/DB only.
+
+### Granting admin refuses a user who holds any membership
+§4.3's invariant is "admins hold no memberships." Promoting a current member
+would break it the instant it took effect (and let them referee a club they
+play in). `grantPlatformAdmin` rejects such a user with a message — they must
+leave their clubs (or use a separate account) first. Enforced in the action
+(`_count.memberships > 0`), not the UI.
+
+### You cannot revoke your own admin, and cannot revoke the last admin
+Either would risk locking every operator out of `/admin`. Both are checked
+server-side in `revokePlatformAdmin`: `userId === me.id` for self, and a live
+`user.count({ where: { isPlatformAdmin: true } }) <= 1` for the last-admin case.
+The count is the real invariant — it also catches a second admin trying to
+demote the only *other* one down to a single remaining admin — so it is checked
+against the DB, not the session.
+
+### The guard moves up into `layout.tsx` — supersedes the "no shell" note
+With three routes it is wasteful and error-prone to repeat
+`requirePlatformAdmin()` in each `page.tsx`, so `admin/layout.tsx` runs it once
+for the whole segment and renders the nav shell + sign-out. The actions keep
+their own independent checks (the layout guard protects pages, not entry
+points). **This supersedes the "deliberately plain, no shell" note from
+multi-club step 6** ("Admins manage lifecycle, never club contents"): the page
+grew a second and third section and needed navigation.
+
+### Overview stats are counts only, computed per request
+No new tables, no cached aggregates, no time-bucketed charts. `count()` /
+`groupBy` over clubs, users, and memberships is cheap at this scale and cannot
+drift. Rendered as plain `Card` stat tiles — no chart library, there is no
+series to plot. Richer stats (growth over time, per-club rollups) are deferred;
+the latter also borders on "club internals" and is left out on purpose.
+
+### No suspend-user, no admin-triggered password reset
+Both were considered and dropped for v1: a user off-switch is a new schema field
++ auth-check wiring, and an admin reset lever hands operators power over
+individual accounts. Neither is needed to view users and manage the admin bench.
+
+### No migration
+Every field this feature needs already exists (`User.isPlatformAdmin`,
+`ClubStatus`) — it is reads plus one boolean flip.
+
+### The client component is `user-toggle.tsx`, not `user-actions.tsx`
+`plans/ADMIN.md` sketched the client bits as `user-actions.tsx` beside the
+server `user-actions.ts` (mirroring `club-actions.tsx`/`actions.ts`). But those
+two share the basename `user-actions`, and a `.tsx` importing `./user-actions`
+resolves to *itself* rather than the `.ts` — so the client file is
+`user-toggle.tsx` (exporting `AdminToggle`) to keep the basenames distinct.

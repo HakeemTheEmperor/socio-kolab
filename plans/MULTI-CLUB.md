@@ -87,10 +87,14 @@ Update signature to `can(membership, action)` operating on the membership resolv
 Form: club name, slug (prefilled via `slugify`, editable, validated live via server action for format + uniqueness), description (optional). Submit → creates Club (status PENDING, `requestedById`) + a Membership for the creator (role PRESIDENT, status ACTIVE — dormant until the club is approved since PENDING clubs resolve as 404). Confirmation screen: "Request submitted — you'll get access once it's approved." The pending request also appears on the user's `/clubs` page as a "pending approval" card.
 
 ### 4.2 Platform admin (`/admin`)
-- Guard: `isPlatformAdmin` only; others → `notFound()`.
+- Guard: `isPlatformAdmin` only; others → `notFound()`. Runs once in `admin/layout.tsx` for the whole segment; each action re-checks it independently.
+- The portal has three sections behind a nav shell (see `plans/ADMIN.md`):
+  - **Overview** — platform counts only (clubs by status, users, memberships), computed per request; the Pending card links to the Clubs queue.
+  - **Clubs** — the lifecycle tables below.
+  - **Users** — a read-only directory (name, email, verified, membership count, role, joined) whose only write is granting/revoking platform-admin access, governed by the §4.3 invariants (a member can't be granted; you can't revoke yourself or the last admin).
 - Pending requests table: club name, slug, description, requester name/email, requested date; Approve / Reject buttons. Approve → status ACTIVE + `approvedAt`; the club immediately resolves at its slug. Reject → status REJECTED.
 - All-clubs table: name, slug, status, member count, created date; action to SUSPEND / reactivate an ACTIVE/SUSPENDED club (confirm dialog).
-- No admin editing of club internals — admins manage club lifecycle, not club data.
+- No admin editing of club internals — admins manage club lifecycle and platform roles, never club data.
 - Seed: set `isPlatformAdmin: true` on a dedicated `admin@platform.test` user (password `password123`), who has no memberships.
 
 ### 4.3 Separation of duties (admins are referees, not players)
