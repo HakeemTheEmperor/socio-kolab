@@ -28,7 +28,7 @@ and deviations.
 | `/verify-email`, `/forgot-password`, `/reset-password` | Public. Email-verification and password-reset link targets. |
 | `/clubs` | Signed in. Your clubs. Auto-forwards if you have exactly one and nothing pending. |
 | `/clubs/new` | Signed in. Request a new club. |
-| `/admin` | Platform admins only (404 for everyone else). Approve, reject, suspend clubs. |
+| `/admin` | Platform admins only (404 for everyone else). Overview, Clubs (approve, reject, suspend), and a Users directory where platform-admin access is granted/revoked. |
 | `/{clubSlug}/register` | Public. Apply to that club. |
 | `/{clubSlug}/events/{id}/register` | Public. Register for that event (see below). |
 | `/{clubSlug}/dashboard`, `/members`, `/dues`, `/events`, `/elections`, `/partners`, `/settings`, `/profile` | Members of that club, with an ACTIVE membership. |
@@ -356,7 +356,7 @@ src/
       verify-email/    # verification link target
       forgot-password/ reset-password/   # password-reset request + link target
       clubs/           # club switcher + /clubs/new (request a club)
-    admin/             # platform admin (club lifecycle only)
+    admin/             # platform admin: Overview, Clubs (lifecycle), Users (admin roles)
     [clubSlug]/
       register/        # public, club-scoped application
       (public)/

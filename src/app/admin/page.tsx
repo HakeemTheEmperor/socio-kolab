@@ -1,14 +1,6 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 
-import { signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { requirePlatformAdmin } from "@/lib/admin";
-import { formatDate } from "@/lib/format";
-import { Inbox } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/empty-state";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -16,208 +8,81 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { RequestDecision, SuspensionToggle } from "./club-actions";
 
-export const metadata: Metadata = { title: "Admin — Club Portal" };
+/** All club statuses, so a status with zero clubs still shows a 0. */
+const CLUB_STATUSES = ["ACTIVE", "PENDING", "REJECTED", "SUSPENDED"] as const;
 
-/** Club lifecycle status → badge variant. */
-const STATUS_VARIANTS = {
-  ACTIVE: "success",
-  PENDING: "warning",
-  REJECTED: "danger",
-  SUSPENDED: "neutral",
-} as const;
+export default async function AdminOverviewPage() {
+  // The layout already ran requirePlatformAdmin(); these are cheap counts,
+  // computed per request — no cached aggregates that could drift.
+  const [clubsByStatus, userCount, membershipCount] = await Promise.all([
+    prisma.club.groupBy({ by: ["status"], _count: true }),
+    prisma.user.count(),
+    prisma.membership.count(),
+  ]);
 
-function ClubStatusBadge({ status }: { status: string }) {
-  return (
-    <Badge variant={STATUS_VARIANTS[status as keyof typeof STATUS_VARIANTS] ?? "neutral"}>
-      {status.charAt(0) + status.slice(1).toLowerCase()}
-    </Badge>
-  );
-}
-
-export default async function AdminPage() {
-  // Not an admin → 404. Nobody learns this page exists.
-  const admin = await requirePlatformAdmin();
-
-  const clubs = await prisma.club.findMany({
-    orderBy: [{ createdAt: "desc" }],
-    include: { _count: { select: { memberships: true } } },
-  });
-
-  const pending = clubs.filter((c) => c.status === "PENDING");
-
-  // Requesters, resolved in one query rather than per row.
-  const requesterIds = pending
-    .map((c) => c.requestedById)
-    .filter((id): id is string => !!id);
-  const requesters = requesterIds.length
-    ? await prisma.user.findMany({
-        where: { id: { in: requesterIds } },
-        select: { id: true, name: true, email: true },
-      })
-    : [];
-  const requesterById = new Map(requesters.map((u) => [u.id, u]));
-
-  async function doSignOut() {
-    "use server";
-    await signOut({ redirectTo: "/login" });
+  const clubCounts = Object.fromEntries(
+    CLUB_STATUSES.map((status) => [status, 0]),
+  ) as Record<(typeof CLUB_STATUSES)[number], number>;
+  for (const row of clubsByStatus) {
+    clubCounts[row.status as (typeof CLUB_STATUSES)[number]] = row._count;
   }
+  const clubTotal = CLUB_STATUSES.reduce((sum, s) => sum + clubCounts[s], 0);
 
-  // Deliberately plain: this page is for the platform operator, not for members.
-  // Clean defaults, no shell, no theming beyond the platform default (§C2).
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-8">
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
-        <div>
-          <h1 className="text-lg font-medium">Platform admin</h1>
-          <p className="text-[13px] text-muted-foreground">
-            Signed in as {admin.email} · club lifecycle only
-          </p>
-        </div>
-        <form action={doSignOut}>
-          <Button variant="outline" size="sm" type="submit">
-            Sign out
-          </Button>
-        </form>
-      </div>
-
-      <Card className="mb-8">
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-base">
-            Club requests ({pending.length})
-          </CardTitle>
-          <CardDescription>
-            Approving a club makes it live at its slug immediately; its requester
-            becomes president.
-          </CardDescription>
+          <CardDescription>Clubs</CardDescription>
+          <CardTitle className="text-3xl">{clubTotal}</CardTitle>
         </CardHeader>
         <CardContent>
-          {pending.length === 0 ? (
-            <EmptyState icon={Inbox} message="No club requests waiting." />
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Club</TableHead>
-                    <TableHead>Address</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Requested by</TableHead>
-                    <TableHead>Requested</TableHead>
-                    <TableHead className="text-right">Decision</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pending.map((club) => {
-                    const requester = club.requestedById
-                      ? requesterById.get(club.requestedById)
-                      : undefined;
-                    return (
-                      <TableRow key={club.id}>
-                        <TableCell className="font-medium">{club.name}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          /{club.slug}
-                        </TableCell>
-                        <TableCell className="max-w-xs">
-                          <span className="line-clamp-2 text-sm text-muted-foreground">
-                            {club.description ?? "—"}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          {requester ? (
-                            <div className="text-sm">
-                              <p>{requester.name}</p>
-                              <p className="text-muted-foreground">
-                                {requester.email}
-                              </p>
-                            </div>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                          {formatDate(club.createdAt)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <RequestDecision clubId={club.id} name={club.name} />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <p className="text-[13px] text-muted-foreground">
+            {clubCounts.ACTIVE} Active · {clubCounts.PENDING} Pending ·{" "}
+            {clubCounts.REJECTED} Rejected · {clubCounts.SUSPENDED} Suspended
+          </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">All clubs ({clubs.length})</CardTitle>
-          <CardDescription>
-            Suspending a club takes it offline for everyone — its URL 404s — and
-            is reversible. Club data is never edited from here.
-          </CardDescription>
+          <CardDescription>Pending requests</CardDescription>
+          <CardTitle className="text-3xl">{clubCounts.PENDING}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Club</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Members</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {clubs.map((club) => (
-                  <TableRow key={club.id}>
-                    <TableCell className="font-medium">{club.name}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {club.status === "ACTIVE" ? (
-                        <Link
-                          href={`/${club.slug}/dashboard`}
-                          className="hover:underline"
-                        >
-                          /{club.slug}
-                        </Link>
-                      ) : (
-                        `/${club.slug}`
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <ClubStatusBadge status={club.status} />
-                    </TableCell>
-                    <TableCell>{club._count.memberships}</TableCell>
-                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                      {formatDate(club.createdAt)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <SuspensionToggle
-                        clubId={club.id}
-                        name={club.name}
-                        status={club.status}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <Link
+            href="/admin/clubs"
+            className="text-[13px] text-primary hover:underline"
+          >
+            Review the queue →
+          </Link>
         </CardContent>
       </Card>
-    </main>
+
+      <Card>
+        <CardHeader>
+          <CardDescription>Users</CardDescription>
+          <CardTitle className="text-3xl">{userCount}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-[13px] text-muted-foreground">
+            Accounts across the whole platform.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardDescription>Memberships</CardDescription>
+          <CardTitle className="text-3xl">{membershipCount}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-[13px] text-muted-foreground">
+            Total across all clubs — a platform-volume number, not one club&apos;s
+            roster.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
