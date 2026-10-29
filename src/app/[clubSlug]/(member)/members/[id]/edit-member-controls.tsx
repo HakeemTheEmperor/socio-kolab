@@ -85,7 +85,7 @@ export function EditMemberControls({
                     "Status updated.");
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label="Status">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -120,7 +120,7 @@ export function EditMemberControls({
                     "Committee updated.");
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label="Committee">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -149,7 +149,7 @@ export function EditMemberControls({
                   "Role updated.");
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Role">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

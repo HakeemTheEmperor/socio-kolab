@@ -172,23 +172,25 @@ export function AppearanceForm({ theme }: { theme: ThemeColors }) {
         ))}
 
         {messages.length > 0 ? (
-          <ul className="space-y-1.5" role="alert">
-            {messages.map((message) => (
-              <li
-                key={message}
-                className={`flex gap-2 text-[13px] ${
-                  blocked ? "text-danger-tint-fg" : "text-warning-tint-fg"
-                }`}
-              >
-                <TriangleAlert
-                  aria-hidden
-                  strokeWidth={1.75}
-                  className="mt-px size-4 shrink-0"
-                />
-                <span>{message}</span>
-              </li>
-            ))}
-          </ul>
+          <div role="alert">
+            <ul className="space-y-1.5">
+              {messages.map((message) => (
+                <li
+                  key={message}
+                  className={`flex gap-2 text-[13px] ${
+                    blocked ? "text-danger-tint-fg" : "text-warning-tint-fg"
+                  }`}
+                >
+                  <TriangleAlert
+                    aria-hidden
+                    strokeWidth={1.75}
+                    className="mt-px size-4 shrink-0"
+                  />
+                  <span>{message}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : null}
 
         <div className="flex items-center gap-2">

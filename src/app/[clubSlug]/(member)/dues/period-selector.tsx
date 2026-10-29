@@ -37,7 +37,7 @@ export function PeriodSelector({
         Period
       </span>
       <Select value={selected} onValueChange={(v) => v && onChange(v)}>
-        <SelectTrigger className="w-32.5 sm:w-40">
+        <SelectTrigger aria-label="Period" className="w-32.5 sm:w-40">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

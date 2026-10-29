@@ -282,6 +282,7 @@ function FieldRow({
         <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
           <Switch
             size="sm"
+            aria-label={`Required: ${field.label}`}
             checked={field.required}
             onCheckedChange={(checked) => onUpdate(field.id, { required: checked })}
           />
