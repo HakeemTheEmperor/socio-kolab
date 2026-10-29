@@ -102,9 +102,13 @@ export function FormBuilder({
 
   const announcements: Announcements = {
     onDragStart: ({ active }) => `Picked up ${labelOf(active.id)}.`,
+    // On pick-up the item starts "over" itself. Announcing that straight after
+    // "Picked up" replaced it in the live region before it could be read out.
     onDragOver: ({ active, over }) =>
       over
-        ? `${labelOf(active.id)} was moved over ${labelOf(over.id)}.`
+        ? over.id === active.id
+          ? undefined
+          : `${labelOf(active.id)} was moved over ${labelOf(over.id)}.`
         : `${labelOf(active.id)} is no longer over a drop target.`,
     onDragEnd: ({ active, over }) =>
       over
