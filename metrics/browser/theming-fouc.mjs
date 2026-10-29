@@ -47,7 +47,12 @@ for (const c of cases) {
     await page.goto(BASE + c.path, { waitUntil: "load" });
     await page.waitForTimeout(1500);
     await cdp.send("Page.stopScreencast");
-    const t = await page.evaluate(() => window.__t);
+    const t = await page.evaluate(() => ({ ...window.__t, origin: performance.timeOrigin }));
+    // The screencast also emits a blank compositor frame ~10 ms after navigation starts, long before the
+    // document paints anything (it is the browser's default white surface, not page output). Judge only
+    // frames from first contentful paint onward: those are what the user can actually see of the page.
+    const keep = frames.map((f) => f.ts * 1000 >= t.origin + (t.fcp ?? 0) - 2);
+    const prePaintBlank = keep.filter((k) => !k).length;
     // Sample corner pixel of each captured frame.
     const probe = await ctx.newPage();
     const px = [];
@@ -56,14 +61,16 @@ for (const c of cases) {
     if (i === 0) { // keep first and last captured frames of run 0 as the "screenshot at first paint"
       const slug = c.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
       fs.mkdirSync("metrics/results/screenshots", { recursive: true });
-      if (frames.length) fs.writeFileSync(`metrics/results/screenshots/${out}-${slug}-first-frame.png`, Buffer.from(frames[0].data, "base64"));
+      const firstReal = frames.find((_, i) => keep[i]);
+      if (firstReal) fs.writeFileSync(`metrics/results/screenshots/${out}-${slug}-first-frame.png`, Buffer.from(firstReal.data, "base64"));
       if (frames.length > 1) fs.writeFileSync(`metrics/results/screenshots/${out}-${slug}-last-frame.png`, Buffer.from(frames[frames.length - 1].data, "base64"));
     }
     const painted = t.frames.filter((f) => f.painted || true);
     const beforeFcp = t.frames.filter((f) => !f.painted && f.bg !== "");
     runs.push({
-      framesCaptured: frames.length, framePixels: [...new Set(px)], firstFramePixel: px[0] ?? null,
-      framesNotMatchingThemeBg: px.filter((p) => p !== c.expect.bg).length,
+      framesCaptured: frames.length, framePixels: [...new Set(px.filter((_, i) => keep[i]))], firstFramePixel: px.find((_, i) => keep[i]) ?? null,
+      prePaintBlankFrames: prePaintBlank,
+      framesNotMatchingThemeBg: px.filter((p, i) => keep[i] && p !== c.expect.bg).length,
       rafFramesBeforeFcp: t.frames.filter((f) => !f.painted).length,
       rafFramesBeforeFcpWithWrongTokens: t.frames.filter((f) => !f.painted && f.bg !== "" && (f.bg !== c.expect.bg || f.primary !== c.expect.primary)).length,
       rafFramesAfterFcpWithWrongTokens: t.frames.filter((f) => f.painted && (f.bg !== c.expect.bg || f.primary !== c.expect.primary)).length,
@@ -83,6 +90,7 @@ for (const c of cases) {
   results[c.name] = { path: c.path, expected: c.expect, runs, noJs,
     summary: { cls: { median: median(sum("cls")), min: range(sum("cls"))[0], max: range(sum("cls"))[1] },
       totalFramesCaptured: sum("framesCaptured").reduce((a, b) => a + b, 0),
+      totalPrePaintBlankFramesIgnored: sum("prePaintBlankFrames").reduce((a, b) => a + b, 0),
       totalFramesNotMatchingThemeBg: sum("framesNotMatchingThemeBg").reduce((a, b) => a + b, 0),
       totalRafFramesBeforeFcpWrongTokens: sum("rafFramesBeforeFcpWithWrongTokens").reduce((a, b) => a + b, 0),
       totalRafFramesAfterFcpWrongTokens: sum("rafFramesAfterFcpWithWrongTokens").reduce((a, b) => a + b, 0),
