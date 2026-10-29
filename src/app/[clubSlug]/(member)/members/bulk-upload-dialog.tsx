@@ -20,8 +20,11 @@ import {
   dedupeByEmail,
   parseMemberRows,
 } from "@/lib/members-import";
-import { importRowSchema } from "@/lib/validations/members";
 import { bulkImportMembers, type ImportSummary } from "./actions";
+
+// zod is large; the row schema is fetched when the dialog opens instead of
+// shipping with every visit to the members page.
+type RowSchema = (typeof import("@/lib/validations/members"))["importRowSchema"];
 
 type PreviewRow = {
   line: number;
@@ -33,7 +36,7 @@ type PreviewRow = {
 
 /** Parse + validate the raw text client-side for the preview. The server re-does
  *  all of this on submit — this is UX only, never the security boundary. */
-function buildPreview(raw: string): PreviewRow[] {
+function buildPreview(raw: string, importRowSchema: RowSchema): PreviewRow[] {
   const parsed = parseMemberRows(raw);
   const { duplicates } = dedupeByEmail(parsed);
   const dupLines = new Set(duplicates.map((r) => r.line));
@@ -68,9 +71,13 @@ export function BulkUploadDialog() {
   const [open, setOpen] = useState(false);
   const [raw, setRaw] = useState("");
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [rowSchema, setRowSchema] = useState<RowSchema | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const preview = useMemo(() => buildPreview(raw), [raw]);
+  const preview = useMemo(
+    () => (rowSchema ? buildPreview(raw, rowSchema) : []),
+    [raw, rowSchema],
+  );
   const importable = preview.filter((r) => r.status === "ok").length;
 
   function reset() {
@@ -81,7 +88,13 @@ export function BulkUploadDialog() {
 
   function onOpenChange(next: boolean) {
     setOpen(next);
-    if (!next) reset();
+    if (next) {
+      void import("@/lib/validations/members").then((m) =>
+        setRowSchema(() => m.importRowSchema),
+      );
+    } else {
+      reset();
+    }
   }
 
   async function onFile(file: File | undefined) {
