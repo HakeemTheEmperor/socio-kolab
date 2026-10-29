@@ -31,9 +31,10 @@ const SEMANTIC = {
 
 const LIGHT_TEXT = "#F8FAFC";
 const DARK_TEXT = "#0F172A";
-
-/** Backgrounds below this relative luminance are treated as a dark theme. */
-const DARK_LUMINANCE_THRESHOLD = 0.35;
+/** Last resort when neither soft text color reaches AA: black or white always
+ *  clears 4.5:1 against any color (the worst case is about 4.58:1). */
+const PURE_LIGHT = "#FFFFFF";
+const PURE_DARK = "#000000";
 
 /** WCAG minimum contrast for UI components. Primary must clear it: it carries
  *  links, icons and text drawn directly on the background. */
@@ -91,15 +92,23 @@ function safe(color: string, fallback: string): string {
   return colord(color).isValid() ? color : fallback;
 }
 
-export function isDarkBackground(background: string): boolean {
-  return colord(background).luminance() < DARK_LUMINANCE_THRESHOLD;
+/** A theme is dark when light text reads better on its background than dark text does. */
+function prefersLightText(bg: ReturnType<typeof colord>): boolean {
+  return bg.contrast(LIGHT_TEXT) > bg.contrast(DARK_TEXT);
 }
 
-/** Text color that sits ON `color`: white or near-black, whichever contrasts more. */
+export function isDarkBackground(background: string): boolean {
+  return prefersLightText(colord(background));
+}
+
+/** Text color that sits ON `color`: the soft light or dark text color, whichever
+ *  contrasts more; pure white/black when neither is readable (mid-tone colors). */
 function foregroundOn(color: string): string {
   const c = colord(color);
-  const winner = c.contrast(LIGHT_TEXT) >= c.contrast(DARK_TEXT) ? LIGHT_TEXT : DARK_TEXT;
-  return colord(winner).toHex();
+  const soft = c.contrast(LIGHT_TEXT) >= c.contrast(DARK_TEXT) ? LIGHT_TEXT : DARK_TEXT;
+  if (c.contrast(soft) >= MIN_TEXT_CONTRAST) return colord(soft).toHex();
+  const pure = c.contrast(PURE_LIGHT) >= c.contrast(PURE_DARK) ? PURE_LIGHT : PURE_DARK;
+  return colord(pure).toHex();
 }
 
 /**
@@ -114,12 +123,14 @@ function foregroundOn(color: string): string {
  * it clears the bar — it stays recognisably the same hue, so "Unpaid" still reads
  * as red, it just becomes readable.
  */
-function inkOn(color: string, tint: string, dark: boolean): string {
+function inkOn(color: string, tint: string, dark: boolean, fallback: string): string {
   let ink = colord(color);
   for (let i = 0; i < 50 && ink.contrast(tint) < MIN_TEXT_CONTRAST; i++) {
     ink = dark ? ink.lighten(0.02) : ink.darken(0.02);
   }
-  return ink.toHex();
+  // Deepening the hue can run out of room (a tint of a mid-tone background);
+  // the body text color is the readable choice then.
+  return ink.contrast(tint) >= MIN_TEXT_CONTRAST ? ink.toHex() : fallback;
 }
 
 export function generateTheme(
@@ -131,12 +142,20 @@ export function generateTheme(
   const brand = colord(safe(primary, DEFAULT_THEME.primary));
   const accentColor = colord(safe(accent, DEFAULT_THEME.accent));
 
-  const dark = bg.luminance() < DARK_LUMINANCE_THRESHOLD;
-  const text = colord(dark ? LIGHT_TEXT : DARK_TEXT);
+  const dark = prefersLightText(bg);
+  // Mid-tone backgrounds: neither soft text color reaches AA, so use pure black/white.
+  const text = colord(foregroundOn(bg.toHex()));
 
   // On light themes the surface lifts toward white; on dark it lifts off the
   // background by a few percent. Either way it reads as raised.
   const surface = dark ? bg.mix("#FFFFFF", 0.06) : bg.mix("#FFFFFF", 0.7);
+
+  // Muted text fades toward the background (45% by default). On a background where
+  // that drops below AA it fades less, down to the full text color.
+  let muted = text.mix(bg, 0.45);
+  for (let w = 0.4; w >= 0 && !(muted.contrast(bg) >= MIN_TEXT_CONTRAST && muted.contrast(surface) >= MIN_TEXT_CONTRAST); w -= 0.05) {
+    muted = text.mix(bg, w);
+  }
 
   // Shift a brand color for hover/active: down on light themes, up on dark.
   const shift = (c: ReturnType<typeof colord>, amount: number) =>
@@ -159,37 +178,59 @@ export function generateTheme(
     "--border": bg.mix(text, 0.12).toHex(),
     "--border-strong": bg.mix(text, 0.24).toHex(),
     "--text": text.toHex(),
-    "--text-muted": text.mix(bg, 0.45).toHex(),
+    "--text-muted": muted.toHex(),
     "--text-faint": text.mix(bg, 0.65).toHex(),
 
     "--primary": brand.toHex(),
     "--primary-hover": shift(brand, 0.08).toHex(),
     "--primary-active": shift(brand, 0.14).toHex(),
     "--primary-tint": primaryTint,
-    "--primary-tint-fg": inkOn(brand.toHex(), primaryTint, dark),
+    "--primary-tint-fg": inkOn(brand.toHex(), primaryTint, dark, text.toHex()),
     "--primary-fg": foregroundOn(brand.toHex()),
 
     "--accent": accentColor.toHex(),
     "--accent-hover": shift(accentColor, 0.08).toHex(),
     "--accent-tint": accentTint,
-    "--accent-tint-fg": inkOn(accentColor.toHex(), accentTint, dark),
+    "--accent-tint-fg": inkOn(accentColor.toHex(), accentTint, dark, text.toHex()),
     "--accent-fg": foregroundOn(accentColor.toHex()),
 
     "--success": colord(SEMANTIC.success).toHex(),
     "--success-tint": semanticTints.success,
-    "--success-tint-fg": inkOn(SEMANTIC.success, semanticTints.success, dark),
+    "--success-tint-fg": inkOn(SEMANTIC.success, semanticTints.success, dark, text.toHex()),
     "--danger": colord(SEMANTIC.danger).toHex(),
     "--danger-tint": semanticTints.danger,
-    "--danger-tint-fg": inkOn(SEMANTIC.danger, semanticTints.danger, dark),
+    "--danger-tint-fg": inkOn(SEMANTIC.danger, semanticTints.danger, dark, text.toHex()),
     "--warning": colord(SEMANTIC.warning).toHex(),
     "--warning-tint": semanticTints.warning,
-    "--warning-tint-fg": inkOn(SEMANTIC.warning, semanticTints.warning, dark),
+    "--warning-tint-fg": inkOn(SEMANTIC.warning, semanticTints.warning, dark, text.toHex()),
     "--info": colord(SEMANTIC.info).toHex(),
     "--info-tint": semanticTints.info,
-    "--info-tint-fg": inkOn(SEMANTIC.info, semanticTints.info, dark),
+    "--info-tint-fg": inkOn(SEMANTIC.info, semanticTints.info, dark, text.toHex()),
 
     "--ring": brand.toHex(),
   };
+}
+
+/** Every token pair where text is drawn on a themed surface, and what it is called to a user. */
+const TEXT_PAIRS: [keyof ThemeTokens, keyof ThemeTokens, string][] = [
+  ["--text", "--bg", "body text on the background"],
+  ["--text", "--surface", "body text on cards"],
+  ["--text-muted", "--bg", "secondary text on the background"],
+  ["--text-muted", "--surface", "secondary text on cards"],
+  ["--primary-fg", "--primary", "text on primary buttons"],
+  ["--accent-fg", "--accent", "text on accent chips"],
+  ["--primary-tint-fg", "--primary-tint", "primary badges"],
+  ["--accent-tint-fg", "--accent-tint", "accent badges"],
+  ["--success-tint-fg", "--success-tint", "success badges"],
+  ["--danger-tint-fg", "--danger-tint", "danger badges"],
+  ["--warning-tint-fg", "--warning-tint", "warning badges"],
+  ["--info-tint-fg", "--info-tint", "info badges"],
+];
+
+function unreadableTextPairs(tokens: ThemeTokens): string[] {
+  return TEXT_PAIRS.filter(
+    ([fg, bg]) => colord(tokens[fg]).contrast(tokens[bg]) < MIN_TEXT_CONTRAST,
+  ).map(([, , label]) => label);
 }
 
 export type ThemeValidation = {
@@ -241,6 +282,16 @@ export function validateTheme(
   } else if (accentContrast < MIN_PRIMARY_CONTRAST) {
     warnings.push(
       `Your accent color is low contrast against the background (${accentContrast.toFixed(1)}:1). It will work as a filled badge or button, but avoid relying on it for text or icons.`,
+    );
+  }
+  // Derived text must be readable too. generateTheme fixes what it can (muted text,
+  // button labels, badge ink); what is left is a background where body text itself
+  // falls short, which only a different background can fix.
+  const unreadable = unreadableTextPairs(generateTheme(background, primary, accent));
+  if (unreadable.length > 0) {
+    ok = false;
+    warnings.push(
+      `Text would be hard to read with these colors (${unreadable.join("; ")}; needs at least ${MIN_TEXT_CONTRAST}:1). Try a lighter or darker background.`,
     );
   }
   if (colord(primary).contrast(accent) < MIN_PRIMARY_ACCENT_CONTRAST) {
