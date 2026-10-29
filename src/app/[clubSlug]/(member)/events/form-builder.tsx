@@ -214,10 +214,7 @@ function AddFieldMenu({
         {FIELD_TYPES.map((type) => {
           const { label, icon: Icon } = TYPE_META[type];
           return (
-            <DropdownMenuItem
-              key={type}
-              render={<button type="button" onClick={() => onAdd(type)} />}
-            >
+            <DropdownMenuItem key={type} onClick={() => onAdd(type)}>
               <Icon aria-hidden className="size-4" />
               {label}
             </DropdownMenuItem>
