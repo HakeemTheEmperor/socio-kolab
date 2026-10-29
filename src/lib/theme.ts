@@ -152,8 +152,13 @@ export function generateTheme(
 
   // Muted text fades toward the background (45% by default). On a background where
   // that drops below AA it fades less, down to the full text color.
+  // Judged on the rounded hex values that are actually emitted, so a color that
+  // reads as 4.50:1 on screen is not nudged because its unrounded value is 4.499.
+  const mutedReadable = (c: ReturnType<typeof colord>) =>
+    colord(c.toHex()).contrast(bg.toHex()) >= MIN_TEXT_CONTRAST &&
+    colord(c.toHex()).contrast(surface.toHex()) >= MIN_TEXT_CONTRAST;
   let muted = text.mix(bg, 0.45);
-  for (let w = 0.4; w >= 0 && !(muted.contrast(bg) >= MIN_TEXT_CONTRAST && muted.contrast(surface) >= MIN_TEXT_CONTRAST); w -= 0.05) {
+  for (let w = 0.4; w >= 0 && !mutedReadable(muted); w -= 0.05) {
     muted = text.mix(bg, w);
   }
 

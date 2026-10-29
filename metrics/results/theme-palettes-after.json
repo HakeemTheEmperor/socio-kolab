@@ -1,0 +1,59 @@
+{
+  "results": [
+    {
+      "name": "uniform random RGB",
+      "palettes": 10000,
+      "seed": 20260101,
+      "paletteWithFailingText": 1699,
+      "validatorAccepted": 1386,
+      "validatorRejected": 8614,
+      "failingTextAndBlocked": 1699,
+      "failingTextAndAccepted_falsePasses": 0,
+      "blockedButTextFine": 6915,
+      "perPairFailures": {
+        "--text on --surface": 672,
+        "--text-muted on --surface": 672,
+        "--primary-tint-fg on --primary-tint": 328,
+        "--accent-tint-fg on --accent-tint": 340,
+        "--success-tint-fg on --success-tint": 280,
+        "--info-tint-fg on --info-tint": 290,
+        "--danger-tint-fg on --danger-tint": 178,
+        "--warning-tint-fg on --warning-tint": 274
+      },
+      "perPairFalsePasses": {},
+      "examples": []
+    },
+    {
+      "name": "random brand-like HSL",
+      "palettes": 10000,
+      "seed": 20260101,
+      "paletteWithFailingText": 1549,
+      "validatorAccepted": 1824,
+      "validatorRejected": 8176,
+      "failingTextAndBlocked": 1549,
+      "failingTextAndAccepted_falsePasses": 0,
+      "blockedButTextFine": 6627,
+      "perPairFailures": {
+        "--info-tint-fg on --info-tint": 289,
+        "--warning-tint-fg on --warning-tint": 234,
+        "--success-tint-fg on --success-tint": 316,
+        "--accent-tint-fg on --accent-tint": 305,
+        "--primary-tint-fg on --primary-tint": 293,
+        "--text on --surface": 484,
+        "--text-muted on --surface": 484,
+        "--danger-tint-fg on --danger-tint": 189
+      },
+      "perPairFalsePasses": {},
+      "examples": []
+    }
+  ],
+  "defaults": {
+    "failingPairs": [],
+    "validator": {
+      "ok": true,
+      "warnings": [
+        "Your accent color is low contrast against the background (2.0:1). It will work as a filled badge or button, but avoid relying on it for text or icons."
+      ]
+    }
+  }
+}
