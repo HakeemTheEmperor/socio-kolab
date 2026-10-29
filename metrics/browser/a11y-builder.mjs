@@ -77,13 +77,13 @@ for (const [vpName, vp] of [["desktop", DESKTOP], ["mobile", MOBILE]]) {
   const page = await ctx.newPage();
   await page.goto(`${BASE}/demo-club/events`, { waitUntil: "networkidle" });
   await page.evaluate(() => {
-    window.__live = [];
-    const seen = new Set();
-    const watch = () => document.querySelectorAll("[aria-live]").forEach((el) => {
-      if (seen.has(el)) return; seen.add(el);
-      new MutationObserver(() => { const t = el.textContent.trim(); if (t) window.__live.push(t); }).observe(el, { childList: true, subtree: true, characterData: true });
+    // Record every distinct text a live region holds. Watching the whole body catches regions that are
+    // created with their text already set (dnd-kit mounts its live region when a drag starts).
+    window.__live = []; const last = new Map();
+    const scan = () => document.querySelectorAll("[aria-live]").forEach((el) => {
+      const t = el.textContent.trim(); if (t && last.get(el) !== t) { last.set(el, t); window.__live.push(t); }
     });
-    watch(); new MutationObserver(watch).observe(document.body, { childList: true, subtree: true });
+    new MutationObserver(scan).observe(document.body, { childList: true, subtree: true, characterData: true });
   });
   let keys = 0;
   const press = async (k) => { keys++; await page.keyboard.press(k); };
@@ -97,7 +97,7 @@ for (const [vpName, vp] of [["desktop", DESKTOP], ["mobile", MOBILE]]) {
   ok.titleFocus = await tabTo(/^title$|Title/); await typeText("KB Test Event");
   ok.startsFocus = await tabTo(/^startsAt$/);
   // datetime-local: type digits segment by segment.
-  await typeText("12312030"); await typeText("1000AM");
+  await typeText("12312030"); await press("ArrowRight"); await typeText("1000A");
   // Add three fields via keyboard: trigger -> menu -> item.
   for (const [type, label] of [["Short text", "Alpha"], ["Number", "Beta"], ["Checkbox", "Gamma"]]) {
     ok["add" + type] = await tabTo(/^Add field$/);
@@ -113,7 +113,13 @@ for (const [vpName, vp] of [["desktop", DESKTOP], ["mobile", MOBILE]]) {
   result.keyboard.orderAfterBuild = await labelsNow();
   // Reorder: move "Gamma" (3rd) to the top with Space, ArrowUp x2, Space.
   ok.reorderHandleFocus = await tabTo(/^Reorder Gamma$/);
-  await press("Space"); await page.waitForTimeout(200); await press("ArrowUp"); await page.waitForTimeout(250); await press("ArrowUp"); await page.waitForTimeout(250); await press("Space"); await page.waitForTimeout(400);
+  await press("Space"); await page.waitForTimeout(500);
+  // dnd-kit sometimes ignores an arrow press while the previous move settles, so press until the live
+  // region confirms the item is over the first field (counted in keystrokes), at most 6 times.
+  const liveNow = () => page.evaluate(() => document.querySelector("[id^=DndLiveRegion]")?.textContent ?? "");
+  result.keyboard.arrowPressesToMoveTwoPlaces = 0;
+  for (let i = 0; i < 6 && !/moved over Alpha/.test(await liveNow()); i++) { await press("ArrowUp"); result.keyboard.arrowPressesToMoveTwoPlaces++; await page.waitForTimeout(500); }
+  await press("Space"); await page.waitForTimeout(600);
   result.keyboard.orderAfterReorder = await labelsNow();
   ok.createFocus = await tabTo(/^Create event$/); // footer button (the trigger is behind the modal)
   await press("Enter");
