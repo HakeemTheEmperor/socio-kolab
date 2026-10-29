@@ -13,8 +13,8 @@ import {
   FIELD_PREFIX,
   TEXT_MAX,
   TEXTAREA_MAX,
-  type FormField,
-} from "@/lib/event-forms";
+} from "@/lib/event-form-constants";
+import type { FormField } from "@/lib/event-forms";
 import { submitEventRegistrationAction, type RegistrationState } from "./actions";
 
 /** Identity of the person registering, resolved server-side (never trusted). */

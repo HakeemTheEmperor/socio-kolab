@@ -9,18 +9,21 @@ import { z } from "zod";
  * See EVENT-FORMS.md §1.3.
  */
 
-export const FIELD_TYPES = ["text", "textarea", "select", "checkbox", "number"] as const;
-export type FieldType = (typeof FIELD_TYPES)[number];
+import {
+  FIELD_PREFIX,
+  FIELD_TYPES,
+  LABEL_MAX,
+  MAX_FIELDS,
+  MAX_OPTIONS,
+  OPTION_MAX,
+  TEXT_MAX,
+  TEXTAREA_MAX,
+} from "./event-form-constants";
 
-export const MAX_FIELDS = 20;
-export const MAX_OPTIONS = 20;
-export const LABEL_MAX = 100;
-export const OPTION_MAX = 100;
-export const TEXT_MAX = 500;
-export const TEXTAREA_MAX = 5000;
-
-/** Response inputs are named `custom_{fieldId}` in the rendered form. */
-export const FIELD_PREFIX = "custom_";
+// Re-exported so existing imports keep working. The constants live in their own
+// zod-free module so client components (the builder, the public form) can import
+// them without pulling zod into the browser bundle.
+export * from "./event-form-constants";
 
 /* --------------------------------------------------------------------------
  * Form schema (the builder's output)

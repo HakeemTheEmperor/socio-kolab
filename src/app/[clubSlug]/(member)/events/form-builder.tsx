@@ -53,8 +53,8 @@ import {
   MAX_OPTIONS,
   OPTION_MAX,
   type FieldType,
-  type FormField,
-} from "@/lib/event-forms";
+} from "@/lib/event-form-constants";
+import type { FormField } from "@/lib/event-forms";
 
 const TYPE_META: Record<FieldType, { label: string; icon: LucideIcon }> = {
   text: { label: "Short text", icon: Type },
