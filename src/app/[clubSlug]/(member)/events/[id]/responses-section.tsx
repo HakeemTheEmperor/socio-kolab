@@ -77,7 +77,12 @@ export function ResponsesSection({
       ) : (
         <>
           {/* Desktop: horizontally scrollable table, sticky first column. */}
-          <div className="hidden overflow-x-auto rounded-xl border border-border md:block">
+          <div
+            tabIndex={0}
+            aria-label="Responses table"
+            role="region"
+            className="hidden overflow-x-auto rounded-xl border border-border md:block"
+          >
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-left">
