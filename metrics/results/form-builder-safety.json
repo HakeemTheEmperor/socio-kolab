@@ -1,0 +1,25 @@
+{
+  "seed": 20260101,
+  "forms": 2000,
+  "edits": 126962,
+  "savesAccepted": 11999,
+  "savesRejected": 3877,
+  "responsesSubmitted": 15647,
+  "submissionsRejectedWrongly": 0,
+  "answersChecked": 124683,
+  "answersLost": 0,
+  "answersMisattached": 0,
+  "answersInRemovedColumns": 58929,
+  "columnsMislabelled": 0,
+  "tablesChecked": 9112,
+  "byOp": {
+    "remove": 15939,
+    "save": 15876,
+    "respond": 15902,
+    "rename": 15907,
+    "required": 15924,
+    "options": 15881,
+    "add": 15814,
+    "reorder": 15719
+  }
+}

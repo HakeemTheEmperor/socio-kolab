@@ -1,0 +1,179 @@
+{
+  "results": [
+    {
+      "name": "uniform random RGB",
+      "palettes": 10000,
+      "seed": 20260101,
+      "paletteWithFailingText": 9937,
+      "validatorAccepted": 1634,
+      "validatorRejected": 8366,
+      "failingTextAndBlocked": 8348,
+      "failingTextAndAccepted_falsePasses": 1589,
+      "blockedButTextFine": 18,
+      "perPairFailures": {
+        "--text on --bg": 2806,
+        "--text on --surface": 3347,
+        "--text-muted on --bg": 9611,
+        "--text-muted on --surface": 6188,
+        "--primary-tint-fg on --primary-tint": 2785,
+        "--accent-tint-fg on --accent-tint": 2829,
+        "--success-tint-fg on --success-tint": 2932,
+        "--danger-tint-fg on --danger-tint": 2658,
+        "--warning-tint-fg on --warning-tint": 2942,
+        "--info-tint-fg on --info-tint": 2866,
+        "--accent-fg on --accent": 869,
+        "--primary-fg on --primary": 818
+      },
+      "perPairFalsePasses": {
+        "--text-muted on --bg": 1404,
+        "--accent-fg on --accent": 146,
+        "--text-muted on --surface": 942,
+        "--primary-tint-fg on --primary-tint": 154,
+        "--text on --surface": 179,
+        "--text on --bg": 131,
+        "--accent-tint-fg on --accent-tint": 144,
+        "--success-tint-fg on --success-tint": 160,
+        "--warning-tint-fg on --warning-tint": 166,
+        "--info-tint-fg on --info-tint": 167,
+        "--danger-tint-fg on --danger-tint": 138,
+        "--primary-fg on --primary": 69
+      },
+      "examples": [
+        {
+          "bg": "#59ec5f",
+          "primary": "#373552",
+          "accent": "#e53641",
+          "fails": [
+            "--text-muted on --bg",
+            "--accent-fg on --accent"
+          ]
+        },
+        {
+          "bg": "#011fde",
+          "primary": "#c7d093",
+          "accent": "#fd976f",
+          "fails": [
+            "--text-muted on --bg",
+            "--text-muted on --surface"
+          ]
+        },
+        {
+          "bg": "#4f0e5f",
+          "primary": "#fa5498",
+          "accent": "#6849a5",
+          "fails": [
+            "--text-muted on --surface"
+          ]
+        },
+        {
+          "bg": "#82d6f3",
+          "primary": "#2d3850",
+          "accent": "#6d210c",
+          "fails": [
+            "--text-muted on --bg"
+          ]
+        },
+        {
+          "bg": "#3bf277",
+          "primary": "#1d1a9f",
+          "accent": "#8268ce",
+          "fails": [
+            "--text-muted on --bg",
+            "--accent-fg on --accent"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "random brand-like HSL",
+      "palettes": 10000,
+      "seed": 20260101,
+      "paletteWithFailingText": 9971,
+      "validatorAccepted": 2126,
+      "validatorRejected": 7874,
+      "failingTextAndBlocked": 7865,
+      "failingTextAndAccepted_falsePasses": 2106,
+      "blockedButTextFine": 9,
+      "perPairFailures": {
+        "--text-muted on --bg": 9304,
+        "--primary-fg on --primary": 577,
+        "--text-muted on --surface": 6051,
+        "--info-tint-fg on --info-tint": 2232,
+        "--text on --bg": 2096,
+        "--text on --surface": 2487,
+        "--accent-fg on --accent": 564,
+        "--primary-tint-fg on --primary-tint": 2107,
+        "--accent-tint-fg on --accent-tint": 2127,
+        "--success-tint-fg on --success-tint": 2300,
+        "--danger-tint-fg on --danger-tint": 2060,
+        "--warning-tint-fg on --warning-tint": 2230
+      },
+      "perPairFalsePasses": {
+        "--text-muted on --bg": 1790,
+        "--success-tint-fg on --success-tint": 254,
+        "--text-muted on --surface": 1322,
+        "--primary-fg on --primary": 57,
+        "--primary-tint-fg on --primary-tint": 212,
+        "--accent-fg on --accent": 145,
+        "--info-tint-fg on --info-tint": 250,
+        "--text on --surface": 235,
+        "--text on --bg": 191,
+        "--accent-tint-fg on --accent-tint": 213,
+        "--danger-tint-fg on --danger-tint": 203,
+        "--warning-tint-fg on --warning-tint": 227
+      },
+      "examples": [
+        {
+          "bg": "#b2e983",
+          "primary": "#6b0c1f",
+          "accent": "#1a5029",
+          "fails": [
+            "--text-muted on --bg"
+          ]
+        },
+        {
+          "bg": "#d6b798",
+          "primary": "#4e491f",
+          "accent": "#be307d",
+          "fails": [
+            "--text-muted on --bg"
+          ]
+        },
+        {
+          "bg": "#a7f5f9",
+          "primary": "#828537",
+          "accent": "#1e3f31",
+          "fails": [
+            "--text-muted on --bg"
+          ]
+        },
+        {
+          "bg": "#e4c925",
+          "primary": "#1d47ce",
+          "accent": "#17a574",
+          "fails": [
+            "--text-muted on --bg",
+            "--success-tint-fg on --success-tint"
+          ]
+        },
+        {
+          "bg": "#51edb0",
+          "primary": "#0b17fb",
+          "accent": "#042485",
+          "fails": [
+            "--text-muted on --bg"
+          ]
+        }
+      ]
+    }
+  ],
+  "defaults": {
+    "failingPairs": [],
+    "validator": {
+      "ok": true,
+      "warnings": [
+        "Your accent color is low contrast against the background (2.0:1). It will work as a filled badge or button, but avoid relying on it for text or icons."
+      ]
+    }
+  }
+}
