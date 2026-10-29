@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 
 import {
   Card,
@@ -14,7 +13,25 @@ export const metadata: Metadata = { title: "Sign in — Club Portal" };
 
 // Accounts are platform-level, not per-club: one sign-in reaches every club the
 // user belongs to. Which club they land in is decided at /clubs.
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  // One-shot notices after a completed flow lands back on /login (SIGNUP.MD §4.3).
+  // Read on the server so the form is in the first HTML: reading them in the
+  // client form (useSearchParams) forced it to render after hydration, and the
+  // card grew once it appeared (layout shift).
+  const params = await searchParams;
+  const notice =
+    params.verified === "1"
+      ? "Email verified — sign in to continue."
+      : params.reset === "1"
+        ? "Password reset — sign in with your new password."
+        : params.invited === "1"
+          ? "Password set — sign in to access your club."
+          : null;
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-6">
@@ -38,11 +55,7 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* LoginForm reads ?verified=1 / ?reset=1 via useSearchParams, which
-                the App Router requires to sit under a Suspense boundary. */}
-            <Suspense fallback={null}>
-              <LoginForm />
-            </Suspense>
+            <LoginForm notice={notice} />
           </CardContent>
         </Card>
       </div>

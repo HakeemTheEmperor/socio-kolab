@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -10,21 +9,11 @@ import { Label } from "@/components/ui/label";
 import { ResendVerification } from "../signup/resend-verification";
 import { loginAction, type LoginState } from "./actions";
 
-export function LoginForm() {
+export function LoginForm({ notice }: { notice: string | null }) {
   const [state, formAction, pending] = useActionState<LoginState, FormData>(
     loginAction,
     {},
   );
-  const params = useSearchParams();
-  // One-shot notices after a completed flow lands back on /login (SIGNUP.MD §4.3).
-  const notice =
-    params.get("verified") === "1"
-      ? "Email verified — sign in to continue."
-      : params.get("reset") === "1"
-        ? "Password reset — sign in with your new password."
-        : params.get("invited") === "1"
-          ? "Password set — sign in to access your club."
-          : null;
 
   // The hard gate rejected a correct password on an unverified account: offer a
   // resend instead of a dead-end error (SIGNUP.MD §5.2).
