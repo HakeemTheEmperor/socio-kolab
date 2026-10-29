@@ -104,7 +104,7 @@ export default async function DashboardPage({
           />
           <div className="text-success-tint-fg">
             <p className="text-[15px] font-medium">Paid for {period}</p>
-            <p className="text-[13px] opacity-90">
+            <p className="text-[13px]">
               {formatCurrency(myDues.amount, settings.currency)} ·{" "}
               {formatDate(myDues.paidAt)}
             </p>
@@ -119,7 +119,7 @@ export default async function DashboardPage({
           />
           <div className="text-danger-tint-fg">
             <p className="text-[15px] font-medium">Unpaid for {period}</p>
-            <p className="text-[13px] opacity-90">
+            <p className="text-[13px]">
               Dues of {formatCurrency(settings.duesAmount, settings.currency)}{" "}
               are outstanding — see the treasurer to pay.
             </p>

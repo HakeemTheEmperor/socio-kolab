@@ -26,7 +26,7 @@ export function DateBlock({
       )}
     >
       <span className="text-lg font-semibold text-primary-tint-fg">{get("day")}</span>
-      <span className="text-[11px] uppercase text-primary-tint-fg/80">
+      <span className="text-[11px] uppercase text-primary-tint-fg">
         {get("month")}
       </span>
     </div>

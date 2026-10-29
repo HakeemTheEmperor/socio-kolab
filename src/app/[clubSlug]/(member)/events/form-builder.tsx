@@ -138,7 +138,7 @@ export function FormBuilder({
     <div className="space-y-3">
       {/* Pinned core fields — never draggable, deletable, or editable. */}
       <div className="rounded-lg border border-dashed border-border bg-muted/40 p-3">
-        <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-foreground">
           <Lock aria-hidden className="size-3.5" />
           Always included
         </div>
